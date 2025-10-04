@@ -39,7 +39,7 @@ static void BM_FastDynamicCast_Simple(benchmark::State &state) {
     for (size_t i = 0; i < iters; ++i) {
       SimpleB b;
       SimpleA &a = b;
-      accumulated += fast_dynamic_cast<SimpleB &>(a).method_b_only();
+      accumulated += fast_cast<SimpleB &>(a).method_b_only();
     }
     benchmark::DoNotOptimize(accumulated);
   }
@@ -71,7 +71,7 @@ static void BM_FastDynamicCast_Complex(benchmark::State &state) {
     for (size_t i = 0; i < iters; ++i) {
       ComplexG g;
       ComplexA &a = g;
-      accumulated += fast_dynamic_cast<ComplexG &>(a).method_g_only();
+      accumulated += fast_cast<ComplexG &>(a).method_g_only();
     }
     benchmark::DoNotOptimize(accumulated);
   }
@@ -93,7 +93,7 @@ static void BM_FastDynamicCast_Ptr_Success(benchmark::State &state) {
   SimpleB b;
   SimpleA *a = &b;
   for (auto _ : state) {
-    benchmark::DoNotOptimize(fast_dynamic_cast<SimpleB *>(a));
+    benchmark::DoNotOptimize(fast_cast<SimpleB *>(a));
   }
 }
 BENCHMARK(BM_FastDynamicCast_Ptr_Success)->Arg(DefaultInnerIterations);
@@ -111,7 +111,7 @@ static void BM_FastDynamicCast_Ptr_Failure(benchmark::State &state) {
   SimpleA a;
   SimpleA *ap = &a;
   for (auto _ : state) {
-    benchmark::DoNotOptimize(fast_dynamic_cast<SimpleB *>(ap));
+    benchmark::DoNotOptimize(fast_cast<SimpleB *>(ap));
   }
 }
 BENCHMARK(BM_FastDynamicCast_Ptr_Failure)->Arg(DefaultInnerIterations);
@@ -129,7 +129,7 @@ static void BM_FastDynamicCast_Reused(benchmark::State &state) {
   SimpleB b;
   SimpleA &a = b;
   for (auto _ : state) {
-    benchmark::DoNotOptimize(fast_dynamic_cast<SimpleB &>(a));
+    benchmark::DoNotOptimize(fast_cast<SimpleB &>(a));
   }
 }
 BENCHMARK(BM_FastDynamicCast_Reused)->Arg(DefaultInnerIterations);
@@ -157,7 +157,7 @@ static void BM_DerivedToBase_FastCast(benchmark::State &state) {
   Derived d;
   Derived *dp = &d;
   for (auto _ : state) {
-    auto r = fastcast::fast_dynamic_cast<Base *>(dp);
+    auto r = fastcast::fast_cast<Base *>(dp);
     benchmark::DoNotOptimize(r);
   }
 }

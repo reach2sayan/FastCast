@@ -72,7 +72,7 @@ template <typename To, typename From> CONSTEXPR inline To cast_impl(From *ptr) {
 // Pointer overload
 template <typename To, typename From>
   requires std::is_pointer_v<To>
-constexpr inline To fast_dynamic_cast(From *ptr) {
+constexpr inline To fast_cast(From *ptr) {
   using ToNonPtr = std::remove_pointer_t<To>;
   using ToPtr =
       std::conditional_t<std::is_const_v<From>, const ToNonPtr *, ToNonPtr *>;
@@ -82,9 +82,9 @@ constexpr inline To fast_dynamic_cast(From *ptr) {
 // Reference overload
 template <typename To, typename From>
   requires std::is_reference_v<To>
-constexpr inline To fast_dynamic_cast(From &ref) {
+constexpr inline To fast_cast(From &ref) {
   using ToPtr = std::add_pointer_t<std::remove_reference_t<To>>;
-  auto casted_ptr = fast_dynamic_cast<ToPtr>(&ref);
+  auto casted_ptr = fast_cast<ToPtr>(&ref);
   if (!casted_ptr)
     throw std::bad_cast{};
   return *casted_ptr;
@@ -94,18 +94,18 @@ constexpr inline To fast_dynamic_cast(From &ref) {
 template <typename To, typename From>
 constexpr inline std::shared_ptr<To>
 fast_dynamic_pointer_cast(const std::shared_ptr<From> &ptr) {
-  return std::shared_ptr<To>(ptr, fast_dynamic_cast<To *>(ptr.get()));
+  return std::shared_ptr<To>(ptr, fast_cast<To *>(ptr.get()));
 }
 
 // Identity cast (same type)
 template <typename To, typename From>
   requires std::is_same_v<std::remove_cv_t<To>, std::remove_cv_t<From>>
-constexpr inline To fast_dynamic_cast(To ptr) {
+constexpr inline To fast_cast(To ptr) {
   return ptr;
 }
 } // namespace fastcast
 
-using fastcast::fast_dynamic_cast;
+using fastcast::fast_cast;
 using fastcast::fast_dynamic_pointer_cast;
 
 #endif // FAST_DYNAMIC_CAST_H

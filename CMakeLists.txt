@@ -53,10 +53,10 @@ FetchContent_MakeAvailable(benchmark)
 
 add_library(FastCast INTERFACE fastcast.hpp)
 
-add_executable(measure benchmark.cpp utilities.hpp)
+add_executable(measure benchmark/benchmark.cpp tests/utilities.hpp)
 target_link_libraries(measure PRIVATE benchmark::benchmark FastCast)
 
-add_executable(tests tests.cpp)
+add_executable(tests tests/tests.cpp)
 target_link_libraries(tests PRIVATE FastCast Boost::unit_test_framework)
 target_include_directories(tests PRIVATE ${Boost_INCLUDE_DIRS})
 

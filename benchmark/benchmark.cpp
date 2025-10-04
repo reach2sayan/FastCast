@@ -2,8 +2,8 @@
 // Created by sayan on 10/4/25.
 //
 
-#include "fastcast.hpp"
-#include "utilities.hpp"
+#include "../fastcast.hpp"
+#include "../tests/utilities.hpp"
 #include <benchmark/benchmark.h>
 #include <thread>
 

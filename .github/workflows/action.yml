@@ -99,10 +99,12 @@ jobs:
 
       - name: Run benchmarks
         run: ./build/measure --benchmark_format=json --benchmark_out=benchmark_results.json
-          - name: Store benchmark results
-            uses: benchmark-action/github-action-benchmark@v1
-            with:
-              name: Benchmarks
-              output-filepath: benchmark_results.json
-              github-token: ${{ secrets.GITHUB_TOKEN }}
-              auto-push: true
+
+      - name: Store benchmark results
+        uses: benchmark-action/github-action-benchmark@v1
+        with:
+          name: Benchmarks
+          tool: "google-benchmark"
+          output-filepath: benchmark_results.json
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          auto-push: true

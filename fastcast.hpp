@@ -11,7 +11,7 @@
 #include <limits>
 #include <memory>
 #include <type_traits>
-
+#pragma once
 #if __cplusplus > 202302L
 #define CONSTEXPR constexpr
 #else

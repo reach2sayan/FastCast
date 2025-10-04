@@ -60,7 +60,11 @@ jobs:
         id: strings
         shell: bash
         run: |
-          echo "build-output-dir=${GITHUB_WORKSPACE}/build" >> "$GITHUB_OUTPUT"
+          if [[ "${{ runner.os }}" == "Linux" ]]; then
+            echo "build-output-dir=${GITHUB_WORKSPACE}/build" >> "$GITHUB_OUTPUT"
+          elif [[ "${{ runner.os }}" == "Windows" ]]; then
+            echo "build-output-dir=${GITHUB_WORKSPACE}\build" >> "$GITHUB_OUTPUT"
+          fi
 
       - name: Create build directory
         run: cmake -E make_directory ${{ steps.strings.outputs.build-output-dir }}

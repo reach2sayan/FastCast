@@ -35,7 +35,7 @@ jobs:
         if: runner.os == 'Linux'
         run: |
           sudo apt-get update 
-          sudo apt-get install -y libboost-all-dev cmake ninja-build build-essential
+          sudo apt-get install -y cmake ninja-build build-essential
           if [[ "${{ matrix.c_compiler }}" == "clang" ]]; then
             sudo apt-get install -y clang lld
           fi

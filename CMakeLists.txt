@@ -1,11 +1,23 @@
 cmake_minimum_required(VERSION 3.8)
 project(FastCast)
 include(FetchContent)
+set(FETCHCONTENT_QUIET OFF)
 set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
-find_package(Boost REQUIRED)
+set(BOOST_INCLUDE_LIBRARIES test) # enabled libraries
+set(BOOST_ENABLE_CMAKE ON)
+FetchContent_Declare(
+        Boost
+        GIT_REPOSITORY "https://github.com/boostorg/boost.git"
+        GIT_TAG "boost-1.86.0"
+        GIT_PROGRESS ON
+        GIT_SHALLOW ON
+        OVERRIDE_FIND_PACKAGE TRUE
+        EXCLUDE_FROM_ALL)
+FetchContent_MakeAvailable(Boost)
+find_package(Boost REQUIRED Test)
 
 set(BENCHMARK_ENABLE_GTEST_TESTS
         OFF CACHE BOOL

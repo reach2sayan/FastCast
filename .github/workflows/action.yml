@@ -77,12 +77,13 @@ jobs:
                   -G Ninja \
                   -S ${{ github.workspace }}
           elif [[ "${{ runner.os }}" == "Windows" ]]; then
-            cmake -B "${{ steps.strings.outputs.build-output-dir }}" `
-                  -DCMAKE_CXX_STANDARD=20 `
-                  -DCMAKE_BUILD_TYPE=${{ matrix.build_type }} `
-                  -G "Visual Studio 17 2022" `
-                  -A x64 `
+            cmake -B "${{ steps.strings.outputs.build-output-dir }}" \
+                  -DCMAKE_CXX_STANDARD=20 \
+                  -DCMAKE_BUILD_TYPE=${{ matrix.build_type }} \
+                  -G "Visual Studio 17 2022" \
+                  -A x64 \
                   -S ${{ github.workspace }}
+          fi
 
       - name: Cache build
         uses: actions/cache@v3

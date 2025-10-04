@@ -4,7 +4,7 @@
 
 // fastcast_test.cpp
 #define BOOST_TEST_MODULE FastCastTests
-#include "fastcast.hpp"
+#include "../fastcast.hpp"
 #include "utilities.hpp"
 #include <boost/test/included/unit_test.hpp>
 

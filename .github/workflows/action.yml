@@ -95,10 +95,12 @@ jobs:
         run: ctest --build-config ${{ matrix.build_type }}
 
       - name: Run tests
-        run: ./build/tests
+        working-directory: ${{ steps.strings.outputs.build-output-dir }}
+        run: ./tests
 
       - name: Run benchmarks
-        run: ./build/measure --benchmark_format=console --benchmark_out=benchmark_results.json
+        working-directory: ${{ steps.strings.outputs.build-output-dir }}
+        run: ./measure --benchmark_format=console --benchmark_out=benchmark_results.json
 
       - name: Upload benchmark results
         uses: actions/upload-artifact@v4

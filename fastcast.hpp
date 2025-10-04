@@ -18,11 +18,9 @@
 #define CONSTEXPR
 #endif
 
-
 namespace fastcast {
 
-// Core implementation for pointer types
-template <typename To, typename From> CONSTEXPR inline To cast_impl(From *ptr) {
+template <typename To, typename From> CONSTEXPR inline To fast_cast_impl(From *ptr) {
   using v_table_ptr = const uintptr_t *;
   if constexpr (std::is_same_v<std::remove_cv_t<From>,
                                std::remove_pointer_t<To>>) {
@@ -76,7 +74,7 @@ constexpr inline To fast_cast(From *ptr) {
   using ToNonPtr = std::remove_pointer_t<To>;
   using ToPtr =
       std::conditional_t<std::is_const_v<From>, const ToNonPtr *, ToNonPtr *>;
-  return cast_impl<ToPtr>(ptr);
+  return fast_cast_impl<ToPtr>(ptr);
 }
 
 // Reference overload

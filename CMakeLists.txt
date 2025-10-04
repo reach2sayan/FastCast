@@ -17,8 +17,7 @@ FetchContent_Declare(
         OVERRIDE_FIND_PACKAGE TRUE
         EXCLUDE_FROM_ALL)
 FetchContent_MakeAvailable(Boost)
-find_package(Boost REQUIRED Test)
-
+find_package(Boost REQUIRED COMPONENTS unit_test_framework)
 set(BENCHMARK_ENABLE_GTEST_TESTS
         OFF CACHE BOOL
         "Disable GTest integration for Benchmark"
@@ -39,7 +38,7 @@ target_link_libraries(measure PRIVATE benchmark::benchmark FastCast)
 
 add_executable(tests tests.cpp
         tests.cpp)
-target_link_libraries(tests PRIVATE FastCast)
+target_link_libraries(tests PRIVATE FastCast Boost::unit_test_framework)
 target_include_directories(tests PRIVATE ${Boost_INCLUDE_DIRS})
 
 add_test(NAME tests COMMAND tests)

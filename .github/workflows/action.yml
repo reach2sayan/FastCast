@@ -60,6 +60,17 @@ jobs:
       - name: Create build directory
         run: cmake -E make_directory ${{ steps.strings.outputs.build-output-dir }}
 
+      # Restore cached apt packages
+      - name: Cache apt packages
+        uses: actions/cache@v3
+        with:
+          path:
+            - /var/cache/apt/archives
+            - /var/lib/apt/lists
+          key: ${{ runner.os }}-apt-${{ hashFiles('**/CMakeLists.txt') }}
+          restore-keys: |
+            ${{ runner.os }}-apt-
+
       - name: Configure CMake (Linux)
         if: runner.os == 'Linux'
         run: |
@@ -92,11 +103,8 @@ jobs:
       - name: Run benchmarks
         run: ./build/measure --benchmark_format=json --benchmark_out=benchmark_results.json
 
-      - name: Store benchmark results
-        uses: benchmark-action/github-action-benchmark@v1
+      - name: Upload benchmark results
+        uses: actions/upload-artifact@v4
         with:
-          name: Benchmarks
-          tool: googlecpp
-          output-file-path: benchmark_results.json
-          github-token: ${{ secrets.GITHUB_TOKEN }}
-          auto-push: false
+            name: benchmark-results
+            path: benchmark_results.json

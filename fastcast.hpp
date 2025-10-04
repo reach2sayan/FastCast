@@ -12,41 +12,61 @@
 #include <memory>
 #include <type_traits>
 
-namespace fast_dcast {
-using v_table_ptr = const uintptr_t *;
+#if __cplusplus > 202302L
+#define CONSTEXPR constexpr
+#else
+#define CONSTEXPR
+#endif
 
-constexpr std::ptrdiff_t NO_OFFSET = std::numeric_limits<std::ptrdiff_t>::max();
+
+namespace fastcast {
 
 // Core implementation for pointer types
-template <typename To, typename From> inline To cast_impl(From *ptr) {
-  static_assert(std::is_polymorphic_v<From>, "Type is not polymorphic!");
+template <typename To, typename From> CONSTEXPR inline To cast_impl(From *ptr) {
+  using v_table_ptr = const uintptr_t *;
+  if constexpr (std::is_same_v<std::remove_cv_t<From>,
+                               std::remove_pointer_t<To>>) {
+    return ptr;
+  } else if constexpr (std::is_convertible_v<From *, To>) {
+    return static_cast<To>(ptr);
+  } else {
+    static_assert(std::is_polymorphic_v<From>, "Type is not polymorphic!");
+    if (!ptr)
+      return nullptr;
 
-  if (!ptr)
-    return nullptr;
+    constexpr std::ptrdiff_t NO_OFFSET =
+        std::numeric_limits<std::ptrdiff_t>::max();
+    constexpr std::ptrdiff_t FAILED_OFFSET =
+        std::numeric_limits<std::ptrdiff_t>::min();
 
-  thread_local static std::ptrdiff_t offset = NO_OFFSET;
-  thread_local static v_table_ptr src_vtable_ptr = nullptr;
+    // thread-local cache for this (From, To) pair
+    thread_local static std::ptrdiff_t offset = NO_OFFSET;
+    thread_local static v_table_ptr cached_vtable = nullptr;
 
-  // Get vtable pointer
-  auto this_vtable = *reinterpret_cast<v_table_ptr *>(
-      const_cast<std::remove_cv_t<From> *>(ptr));
+    auto this_vtable = *reinterpret_cast<v_table_ptr *>(
+        const_cast<std::remove_cv_t<From> *>(ptr));
 
-  // Fast path: use cached offset if vtable matches
-  if (offset != NO_OFFSET && src_vtable_ptr == this_vtable) {
-    auto new_ptr = reinterpret_cast<std::byte *>(
-                       const_cast<std::remove_cv_t<From> *>(ptr)) +
-                   offset;
-    return reinterpret_cast<To>(new_ptr);
+    if (cached_vtable == this_vtable) {
+      if (offset == FAILED_OFFSET) {
+        return nullptr; // fast-fail
+      }
+      auto new_ptr = reinterpret_cast<std::byte *>(
+                         const_cast<std::remove_cv_t<From> *>(ptr)) +
+                     offset;
+      return reinterpret_cast<To>(new_ptr);
+    }
+
+    // slow path
+    auto result = dynamic_cast<To>(ptr);
+    cached_vtable = this_vtable;
+    if (result) {
+      offset = reinterpret_cast<const std::byte *>(result) -
+               reinterpret_cast<const std::byte *>(ptr);
+    } else {
+      offset = FAILED_OFFSET;
+    }
+    return result;
   }
-
-  // Slow path: perform dynamic_cast and cache result
-  auto result = dynamic_cast<To>(ptr);
-  if (result) {
-    src_vtable_ptr = this_vtable;
-    offset = reinterpret_cast<const std::byte *>(result) -
-             reinterpret_cast<const std::byte *>(ptr);
-  }
-  return result;
 }
 
 // Pointer overload
@@ -83,10 +103,10 @@ template <typename To, typename From>
 constexpr inline To fast_dynamic_cast(To ptr) {
   return ptr;
 }
-} // namespace fast_dcast
+} // namespace fastcast
 
-using fast_dcast::fast_dynamic_cast;
-using fast_dcast::fast_dynamic_pointer_cast;
+using fastcast::fast_dynamic_cast;
+using fastcast::fast_dynamic_pointer_cast;
 
 #endif // FAST_DYNAMIC_CAST_H
 #endif // FASTCAST_FASTCAST_HPP

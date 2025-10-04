@@ -1,0 +1,95 @@
+name: CMake
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+permissions:
+  contents: read
+jobs:
+  build:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            build_type: Release
+            c_compiler: gcc
+            cpp_compiler: g++
+
+          - os: ubuntu-latest
+            build_type: Release
+            c_compiler: clang
+            cpp_compiler: clang++
+
+          - os: windows-latest
+            build_type: Release
+            c_compiler: cl
+            cpp_compiler: cl
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Cache Boost
+        uses: actions/cache@v3
+        with:
+          key: ${{ runner.os }}-boost-${{ hashFiles('CMakeLists.txt') }}
+          path: /usr/include/boost
+          restore-keys: |
+            ${{ runner.os }}-boost-
+
+      - name: Install dependencies (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update 
+          sudo apt-get install -y libboost-all-dev cmake ninja-build build-essential
+          if [[ "${{ matrix.c_compiler }}" == "clang" ]]; then
+            sudo apt-get install -y clang lld
+          fi
+
+      - name: Cache CMake files
+        uses: actions/cache@v3
+        with:
+          path: |
+            ~/.cmake
+            ${{ github.workspace }}/build/CMakeCache.txt
+            ${{ github.workspace }}/build/CMakeFiles
+          key: ${{ runner.os }}-cmake-${{ hashFiles('CMakeLists.txt', '**/*.cmake') }}
+          restore-keys: |
+            ${{ runner.os }}-cmake-
+
+      - name: Set reusable strings
+        id: strings
+        shell: bash
+        run: |
+          echo "build-output-dir=${GITHUB_WORKSPACE}/build" >> "$GITHUB_OUTPUT"
+
+      - name: Create build directory
+        run: cmake -E make_directory ${{ steps.strings.outputs.build-output-dir }}
+
+      - name: Configure CMake (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          cmake -B ${{ steps.strings.outputs.build-output-dir }} \
+            -DCMAKE_CXX_STANDARD=23 \
+            -DCMAKE_CXX_COMPILER=${{ matrix.cpp_compiler }} \
+            -DCMAKE_C_COMPILER=${{ matrix.c_compiler }} \
+            -DCMAKE_BUILD_TYPE=${{ matrix.build_type }} \
+            -G Ninja \
+            -S ${{ github.workspace }}
+
+      - name: Cache build
+        uses: actions/cache@v3
+        with:
+          path: ${{ github.workspace }}/build
+          key: ${{ runner.os }}-build-${{ hashFiles('**/*.cpp', '**/*.hpp', '**/*.h') }}
+          restore-keys: |
+            ${{ runner.os }}-build-
+
+      - name: Build
+        run: cmake --build ${{ steps.strings.outputs.build-output-dir }} --config ${{ matrix.build_type }}
+
+      - name: Test
+        working-directory: ${{ steps.strings.outputs.build-output-dir }}
+        run: ctest --build-config ${{ matrix.build_type }}

@@ -15,7 +15,7 @@ struct SimpleA {
   virtual ~SimpleA() = default;
 };
 struct SimpleB : public SimpleA {
-  virtual int method_b_only() { return 42; }
+  virtual int method_b_only() const { return 42; }
 };
 
 //
@@ -45,7 +45,7 @@ struct ComplexD : public ComplexC {
   virtual int method() override { return 4; }
 };
 struct ComplexE : public virtual ComplexB {
-  virtual int method() override { return 5; }
+  virtual int method() override { return 2520; }
 };
 struct ComplexF : public ComplexE {
   virtual int method() override { return 6; }
@@ -54,5 +54,10 @@ struct ComplexG : public ComplexD, public ComplexF {
   virtual int method() override { return 1729; }
   virtual int method_g_only() { return method(); }
 };
+
+struct Base { virtual ~Base() = default; };
+struct Derived : Base {};
+struct AnotherBase { virtual ~AnotherBase() = default; };
+struct Multi : Base, AnotherBase {};
 
 #endif // FASTCAST_UTILITIES_HPP

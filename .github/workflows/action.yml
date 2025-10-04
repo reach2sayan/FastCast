@@ -31,14 +31,6 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Cache Boost
-        uses: actions/cache@v3
-        with:
-          key: ${{ runner.os }}-boost-${{ hashFiles('CMakeLists.txt') }}
-          path: /usr/include/boost
-          restore-keys: |
-            ${{ runner.os }}-boost-
-
       - name: Install dependencies (Linux)
         if: runner.os == 'Linux'
         run: |
@@ -72,7 +64,7 @@ jobs:
         if: runner.os == 'Linux'
         run: |
           cmake -B ${{ steps.strings.outputs.build-output-dir }} \
-            -DCMAKE_CXX_STANDARD=23 \
+            -DCMAKE_CXX_STANDARD=20 \
             -DCMAKE_CXX_COMPILER=${{ matrix.cpp_compiler }} \
             -DCMAKE_C_COMPILER=${{ matrix.c_compiler }} \
             -DCMAKE_BUILD_TYPE=${{ matrix.build_type }} \
@@ -107,4 +99,4 @@ jobs:
           tool: googlecpp
           output-file-path: benchmark_results.json
           github-token: ${{ secrets.GITHUB_TOKEN }}
-          auto-push: true
+          auto-push: false

@@ -6,6 +6,8 @@
 #include <limits>
 #include <memory>
 #include <type_traits>
+#include <optional>
+
 #pragma once
 #if __cplusplus > 202302L
 #define CONSTEXPR constexpr
@@ -86,7 +88,7 @@ template <typename To, typename From>
 constexpr inline std::shared_ptr<To>
 fast_dynamic_pointer_cast(const std::shared_ptr<From> &ptr) {
   if (auto raw = fast_cast<To *>(ptr.get()))
-    return std::shared_ptr<To>(ptr, std::move(raw));
+    return std::shared_ptr<To>(ptr, raw);
   return nullptr;
 }
 

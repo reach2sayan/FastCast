@@ -94,5 +94,15 @@ fast_dynamic_pointer_cast(const std::shared_ptr<From> &ptr) {
 
 } // namespace fastcast
 
+#if defined(__GXX_ABI_VERSION)
+#define FASTCAST_SUPPORTED true
+#elif defined(_MSC_VER)
+#define FASTCAST_SUPPORTED true
+#else
+#error "Unsupported C++ ABI: fast_cast requires Itanium or MSVC vtable layout."
+#endif
+
+#if defined(FASTCAST_SUPPORTED)
 using fastcast::fast_cast;
 using fastcast::fast_dynamic_pointer_cast;
+#endif

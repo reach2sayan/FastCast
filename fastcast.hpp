@@ -2,11 +2,6 @@
 // Created by sayan on 10/4/25.
 //
 
-#ifndef FASTCAST_FASTCAST_HPP
-#define FASTCAST_FASTCAST_HPP
-#ifndef FAST_DYNAMIC_CAST_H
-#define FAST_DYNAMIC_CAST_H
-
 #include <cstddef>
 #include <limits>
 #include <memory>
@@ -99,6 +94,3 @@ fast_dynamic_pointer_cast(const std::shared_ptr<From> &ptr) {
 
 using fastcast::fast_cast;
 using fastcast::fast_dynamic_pointer_cast;
-
-#endif // FAST_DYNAMIC_CAST_H
-#endif // FASTCAST_FASTCAST_HPP

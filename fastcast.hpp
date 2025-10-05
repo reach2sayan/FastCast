@@ -5,14 +5,14 @@
 #include <cstddef>
 #include <limits>
 #include <memory>
-#include <type_traits>
 #include <optional>
+#include <type_traits>
 
 #pragma once
 #if __cplusplus > 202302L
-#define CONSTEXPR constexpr
+#define FASTCAST_CONSTEXPR constexpr
 #else
-#define CONSTEXPR
+#define FASTCAST_CONSTEXPR
 #endif
 
 #if defined(__GXX_ABI_VERSION)
@@ -27,7 +27,8 @@
 namespace fastcast {
 
 // Core implementation for pointer types
-template <typename To, typename From> CONSTEXPR inline To cast_impl(From *ptr) {
+template <typename To, typename From>
+FASTCAST_CONSTEXPR inline To cast_impl(From *ptr) {
   using v_table_ptr = const uintptr_t *;
   if constexpr (std::is_same_v<std::remove_cv_t<From>,
                                std::remove_pointer_t<To>>) {
@@ -105,4 +106,7 @@ fast_dynamic_pointer_cast(const std::shared_ptr<From> &ptr) {
 
 using fastcast::fast_cast;
 using fastcast::fast_dynamic_pointer_cast;
+
+#if defined FASTCAST_CONSTEXPR
+#undef FASTCAST_CONSTEXPR
 #endif

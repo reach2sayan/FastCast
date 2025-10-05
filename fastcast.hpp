@@ -110,3 +110,4 @@ using fastcast::fast_dynamic_pointer_cast;
 #if defined FASTCAST_CONSTEXPR
 #undef FASTCAST_CONSTEXPR
 #endif
+#endif

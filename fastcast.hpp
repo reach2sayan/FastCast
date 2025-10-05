@@ -18,7 +18,6 @@
 #define CONSTEXPR
 #endif
 
-
 namespace fastcast {
 
 // Core implementation for pointer types
@@ -59,12 +58,10 @@ template <typename To, typename From> CONSTEXPR inline To cast_impl(From *ptr) {
     // slow path
     auto result = dynamic_cast<To>(ptr);
     cached_vtable = this_vtable;
-    if (result) {
-      offset = reinterpret_cast<const std::byte *>(result) -
-               reinterpret_cast<const std::byte *>(ptr);
-    } else {
-      offset = FAILED_OFFSET;
-    }
+    offset = static_cast<bool>(result)
+                 ? reinterpret_cast<const std::byte *>(result) -
+                       reinterpret_cast<const std::byte *>(ptr)
+                 : FAILED_OFFSET;
     return result;
   }
 }
@@ -84,25 +81,20 @@ template <typename To, typename From>
   requires std::is_reference_v<To>
 constexpr inline To fast_cast(From &ref) {
   using ToPtr = std::add_pointer_t<std::remove_reference_t<To>>;
-  auto casted_ptr = fast_cast<ToPtr>(&ref);
-  if (!casted_ptr)
-    throw std::bad_cast{};
-  return *casted_ptr;
+  if (auto casted = fast_cast<ToPtr>(&ref))
+    return *casted;
+  throw std::bad_cast{};
 }
 
 // shared_ptr overload
 template <typename To, typename From>
 constexpr inline std::shared_ptr<To>
 fast_dynamic_pointer_cast(const std::shared_ptr<From> &ptr) {
-  return std::shared_ptr<To>(ptr, fast_cast<To *>(ptr.get()));
+  if (auto raw = fast_cast<To *>(ptr.get()))
+    return std::shared_ptr<To>(ptr, std::move(raw));
+  return nullptr;
 }
 
-// Identity cast (same type)
-template <typename To, typename From>
-  requires std::is_same_v<std::remove_cv_t<To>, std::remove_cv_t<From>>
-constexpr inline To fast_cast(To ptr) {
-  return ptr;
-}
 } // namespace fastcast
 
 using fastcast::fast_cast;

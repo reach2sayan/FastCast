@@ -7,7 +7,9 @@
 correctness.
 
 The code is heavily inspired by [FastDynamicCast](https://github.com/tobspr/FastDynamicCast). This is effectively a
-modern C++ implementation of FastDynamicCast.
+modern C++ implementation of FastDynamicCast. This is the basic idea in a single image
+
+![offset](ptroffset.png)
 
 # Improvements from FastDynamicCast
 

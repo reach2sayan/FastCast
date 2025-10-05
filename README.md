@@ -11,6 +11,8 @@ modern C++ implementation of FastDynamicCast. This is the basic idea in a single
 
 ![offset](ptroffset.png)
 
+Also read [this reddit post.](https://www.reddit.com/r/cpp/comments/ilbf1y/vtable_layout_differences_between_itanium_and)
+
 # Improvements from FastDynamicCast
 
 The library also includes **compile-time optimizations**:

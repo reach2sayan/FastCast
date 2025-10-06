@@ -29,7 +29,6 @@ namespace fastcast {
 // Core implementation for pointer types
 template <typename To, typename From>
 FASTCAST_CONSTEXPR inline To cast_impl(From *ptr) {
-  using v_table_ptr = const uintptr_t *;
   if constexpr (std::is_same_v<std::remove_cv_t<From>,
                                std::remove_pointer_t<To>>) {
     return ptr;
@@ -45,13 +44,12 @@ FASTCAST_CONSTEXPR inline To cast_impl(From *ptr) {
     constexpr std::ptrdiff_t FAILED_OFFSET =
         std::numeric_limits<std::ptrdiff_t>::min();
 
+    using v_table_ptr = const void *;
     // thread-local cache for this (From, To) pair
     thread_local static std::ptrdiff_t offset = NO_OFFSET;
     thread_local static v_table_ptr cached_vtable = nullptr;
 
-    v_table_ptr this_vtable;
-    std::memcpy(&this_vtable, ptr, sizeof(v_table_ptr));
-
+    auto this_vtable = *reinterpret_cast<void * const *>(ptr);
     if (cached_vtable == this_vtable) {
       if (offset == FAILED_OFFSET) {
         return nullptr; // fast-fail

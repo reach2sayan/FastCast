@@ -49,8 +49,6 @@ FASTCAST_CONSTEXPR inline To cast_impl(From *ptr) {
     thread_local static std::ptrdiff_t offset = NO_OFFSET;
     thread_local static v_table_ptr cached_vtable = nullptr;
 
-    //auto this_vtable = *reinterpret_cast<v_table_ptr *>(
-    //    const_cast<std::remove_cv_t<From> *>(ptr));
     v_table_ptr this_vtable;
     std::memcpy(&this_vtable, ptr, sizeof(v_table_ptr));
 

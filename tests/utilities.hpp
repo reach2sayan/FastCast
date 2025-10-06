@@ -18,19 +18,20 @@ struct SimpleB : public SimpleA {
   virtual int method_b_only() const { return 42; }
 };
 
-//
-// Complex diamond-ish hierarchy used in your test
-//
-//      A
-//      |
-//      B
-//      | \
-//      C  E
-//      |  |
-//      D  F
-//       \/
-//        G
-//
+/*
+ Complex diamond-ish hierarchy used in your test
+
+     A
+     |
+     B
+     | \
+     C  E
+     |  |
+     D  F
+      \/
+       G
+*/
+
 struct ComplexA {
   virtual ~ComplexA() = default;
   virtual int method() { return 1; }

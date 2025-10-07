@@ -25,35 +25,32 @@
 
 #if defined(FASTCAST_SUPPORTED)
 namespace fastcast {
-
-// Core implementation for pointer types
 template <typename To, typename From>
 FASTCAST_CONSTEXPR inline To cast_impl(From *ptr) {
-  if constexpr (std::is_same_v<std::remove_cv_t<From>,
-                               std::remove_pointer_t<To>>) {
+  if constexpr (std::is_same_v<std::remove_cv_t<From *>,
+                               std::remove_cv_t<To>>) {
     return ptr;
   } else if constexpr (std::is_convertible_v<From *, To>) {
     return static_cast<To>(ptr);
   } else {
     static_assert(std::is_polymorphic_v<From>, "Type is not polymorphic!");
-    if (!ptr)
+    if (!static_cast<bool>(ptr))
       return nullptr;
 
+    using v_table_ptr = const void *;
     constexpr std::ptrdiff_t NO_OFFSET =
         std::numeric_limits<std::ptrdiff_t>::max();
     constexpr std::ptrdiff_t FAILED_OFFSET =
         std::numeric_limits<std::ptrdiff_t>::min();
 
-    using v_table_ptr = const void *;
     // thread-local cache for this (From, To) pair
     thread_local static std::ptrdiff_t offset = NO_OFFSET;
     thread_local static v_table_ptr cached_vtable = nullptr;
 
-    auto this_vtable = *reinterpret_cast<void * const *>(ptr);
+    auto this_vtable = *reinterpret_cast<void *const *>(ptr);
     if (cached_vtable == this_vtable) {
-      if (offset == FAILED_OFFSET) {
+      if (offset == FAILED_OFFSET)
         return nullptr; // fast-fail
-      }
       auto new_ptr = reinterpret_cast<std::byte *>(
                          const_cast<std::remove_cv_t<From> *>(ptr)) +
                      offset;
@@ -62,11 +59,16 @@ FASTCAST_CONSTEXPR inline To cast_impl(From *ptr) {
 
     // slow path
     auto result = dynamic_cast<To>(ptr);
-    cached_vtable = this_vtable;
-    offset = static_cast<bool>(result)
-                 ? reinterpret_cast<const std::byte *>(result) -
-                       reinterpret_cast<const std::byte *>(ptr)
-                 : FAILED_OFFSET;
+
+    // cache
+    {
+      cached_vtable = this_vtable;
+      offset = static_cast<bool>(result)
+                   ? reinterpret_cast<const std::byte *>(result) -
+                         reinterpret_cast<const std::byte *>(ptr)
+                   : FAILED_OFFSET;
+    }
+
     return result;
   }
 }
@@ -78,10 +80,11 @@ constexpr inline To fast_cast(From *ptr) {
   using ToNonPtr = std::remove_pointer_t<To>;
   using ToPtr =
       std::conditional_t<std::is_const_v<From>, const ToNonPtr *, ToNonPtr *>;
-  static_assert(!(std::is_const_v<From> && !std::is_const_v<ToNonPtr>),
-                "fast_cast cannot cast away const from pointee");
-  static_assert(!(std::is_volatile_v<From> && !std::is_volatile_v<ToNonPtr>),
-                "fast_cast cannot cast away volatile from pointee");
+  static_assert(!std::is_const_v<From> || std::is_const_v<ToNonPtr>,
+                "fast_cast: Cannot cast from const pointer to non-const "
+                "pointer (cv-qualification drop is not allowed)");
+  static_assert(!std::is_volatile_v<From> || std::is_volatile_v<ToNonPtr>,
+                "fast_cast: Cannot cast away volatile from pointee");
   return cast_impl<ToPtr>(ptr);
 }
 
@@ -103,6 +106,7 @@ fast_dynamic_pointer_cast(const std::shared_ptr<From> &ptr) {
     return std::shared_ptr<To>(ptr, raw);
   return nullptr;
 }
+
 
 } // namespace fastcast
 

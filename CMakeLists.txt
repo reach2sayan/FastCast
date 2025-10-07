@@ -16,7 +16,7 @@ if (MSVC)
                                                 $<$<CONFIG:Debug,RelWithDebInfo>:EditAndContinue>,
                                                 $<$<CONFIG:Debug,RelWithDebInfo>:ProgramDatabase>>")
     endif ()
-    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /W3")
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /W4")
     set(CMAKE_WINDOWS_EXPORT_ALL_SYMBOLS ON)
 else ()
     if (CMAKE_CXX_COMPILER_ID MATCHES "Clang")

@@ -2,14 +2,16 @@
 // Created by sayan on 10/4/25.
 //
 
+#pragma once
+
+#include <cstddef>
 #include <cstdint>
 #include <cstring>
 #include <limits>
 #include <memory>
 #include <type_traits>
-
-#pragma once
-#if __cplusplus > 202302L
+#include <typeinfo>
+#if __cplusplus >= 202302L
 #define FASTCAST_CONSTEXPR constexpr
 #else
 #define FASTCAST_CONSTEXPR
@@ -49,7 +51,12 @@ FASTCAST_CONSTEXPR inline To cast_impl(From *ptr) {
     thread_local static std::ptrdiff_t offset = NO_OFFSET;
     thread_local static v_table_ptr cached_vtable = nullptr;
 
-    auto this_vtable = *reinterpret_cast<void * const *>(ptr);
+    // Read the vptr (first pointer-sized word of a polymorphic object on the
+    // Itanium / MSVC ABIs) without violating strict aliasing -- memcpy is the
+    // only well-defined way to type-pun the object storage into a void*.
+    v_table_ptr this_vtable;
+    std::memcpy(&this_vtable, static_cast<const void *>(ptr),
+                sizeof this_vtable);
     if (cached_vtable == this_vtable) {
       if (offset == FAILED_OFFSET) {
         return nullptr; // fast-fail

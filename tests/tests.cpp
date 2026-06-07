@@ -3,9 +3,10 @@
 //
 
 // fastcast_test.cpp
+#define CATCH_CONFIG_MAIN
 #include "../fastcast.hpp"
+#include "catch.hpp"
 #include "utilities.hpp"
-#include <catch2/catch_test_macros.hpp>
 
 TEST_CASE("SimpleHierarchy_DynamicVsFast", "[fastcast]") {
   SimpleB b;

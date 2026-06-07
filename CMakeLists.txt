@@ -34,18 +34,11 @@ endif ()
 if (FASTCAST_BUILD_TESTS)
     enable_testing()
 
-    FetchContent_Declare(
-            Catch2
-            GIT_REPOSITORY https://github.com/catchorg/Catch2.git
-            GIT_TAG v3.7.1
-            GIT_SHALLOW ON
-            DOWNLOAD_EXTRACT_TIMESTAMP TRUE
-            EXCLUDE_FROM_ALL)
-    FetchContent_MakeAvailable(Catch2)
-
+    # Catch2 v2 is vendored as a single header (tests/catch.hpp), so no
+    # external dependency needs to be fetched or built.
     add_executable(tests tests/tests.cpp)
     target_link_libraries(tests PRIVATE
-            FastCast fastcast_warnings Catch2::Catch2WithMain)
+            FastCast fastcast_warnings)
 
     add_test(NAME tests COMMAND tests)
 endif ()

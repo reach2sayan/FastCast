@@ -86,29 +86,75 @@ Derived* dp = &d;
 auto same = fast_cast<Derived*>(dp); // trivial, no runtime overhead
 ```
 
-Benchmarks
+## Benchmarks
 
-All benchmarks were run on a 16-core 4.768 GHz CPU.
-Times are for 2,000,000 iterations unless otherwise specified.
+Run on a 16-core 4.768 GHz CPU (mean of 5 repetitions, `-DCMAKE_BUILD_TYPE=Release`).
+Reproduce with `./measure` and regenerate the plots with `benchmark/plot_results.py`
+(see [the benchmark directory](benchmark/)). CPU frequency scaling was enabled, so
+sub-nanosecond figures are throughput-limited and should be read as "effectively free",
+not as precise latencies.
 
-| Benchmark                    | FastCast       | dynamic_cast | static_cast |
-|------------------------------|----------------|--------------|-------------|
-| Simple class hierarchy       | 2.01 ms        | 7.28 ms      | N/A         |
-| Complex hierarchy            | 1.96–2.06 ms   | 44–46 ms     | N/A         |
-| Pointer success              | 0.448 ns       | 2.96–3.03 ns | N/A         |
-| Pointer failure              | 0.671 ns       | 6.84 ns      | N/A         |
-| Reused pointer (cached)      | 0.457–0.579 ns | 3.02–3.88 ns | N/A         |
-| Derived → Base (static path) | 0.110 ns       | 0.110 ns     | 0.109 ns    |
+### Where the speedup comes from: the cache
 
-#### Observations:
+`fast_cast` caches one `(vtable → offset)` entry per `(From, To)` type pair. The first
+cast of a given dynamic type ("cold") falls through to a real `dynamic_cast` plus the
+caching bookkeeping; every **subsequent** cast of that same type ("hot") is just a load
+and a pointer adjustment. The honest comparison therefore has two regimes:
 
-- Static-safe casts are essentially free, matching static_cast.
-- Dynamic path for first-time polymorphic casts is comparable to dynamic_cast.
-- Repeated casts hit the cache and are orders of magnitude faster.
-- Failure caching ensures repeated invalid casts are extremely cheap.
+![cold vs hot](benchmark/plots/cold_vs_hot.png)
+
+| `ComplexA* → ComplexB*` | fast_cast | dynamic_cast |
+|-------------------------|-----------|--------------|
+| **Cold** (cache miss, varying types) | 28.4 ns | 28.0 ns |
+| **Hot** (cache hit, repeated type)   | 0.56 ns | 20.1 ns |
+
+On a cold call `fast_cast` is **~as fast as (marginally slower than) `dynamic_cast`** —
+it does the same `dynamic_cast` and then records the result. The win is entirely in the
+hot path, where it is ~35–50× faster. If your workload casts wildly varying dynamic
+types and never repeats, `fast_cast` is not faster than `dynamic_cast`.
+
+### Hot-path latency (repeated casts of the same object)
+
+Most real call sites cast the same handful of objects/types repeatedly, which keeps the
+cache hot:
+
+![per-call latency](benchmark/plots/per_call.png)
+
+| Per call (hot)          | fast_cast | dynamic_cast |
+|-------------------------|-----------|--------------|
+| Pointer success         | 0.56 ns   | 4.11 ns      |
+| Pointer failure         | 0.56 ns   | 8.49 ns      |
+| Reused reference        | 0.56 ns   | 4.14 ns      |
+
+Failure caching makes repeated *misses* just as cheap as hits.
+
+### Throughput (2,000,000 reference casts, including object construction)
+
+![throughput](benchmark/plots/throughput.png)
+
+| 2,000,000 casts         | fast_cast | dynamic_cast |
+|-------------------------|-----------|--------------|
+| Simple hierarchy        | 2.28 ms   | 9.21 ms      |
+| Complex hierarchy       | 2.43 ms   | 52.1 ms      |
+
+The complex (virtual + multiple inheritance) hierarchy is where `dynamic_cast` is most
+expensive and the cache pays off most.
+
+### Static-safe path
+
+`Derived* → Base*` is resolved at compile time, so `fast_cast`, `static_cast`, and
+`dynamic_cast` all measure ~0.12 ns — identical and effectively free.
+
+#### Observations
+
+- Static-safe / identity casts are free, matching `static_cast`.
+- A **first-time (cold)** polymorphic cast is on par with `dynamic_cast` — `fast_cast`
+  adds only a small constant of bookkeeping over it.
+- **Repeated (hot)** casts hit the cache and are roughly an order of magnitude faster.
+- Failure caching makes repeated invalid casts as cheap as successful hot casts.
 
 ## Requirements
 
 - C++17 minimum (C++23 optional for constexpr enhancements)
 - Header-only, no linking required
-- Optional: Boost (for tests), Google Benchmark (for benchmarks)
+- Optional: [Catch2 v2](https://github.com/catchorg/Catch2) (for tests; vendored as a single header at `tests/catch.hpp`, no fetch required), Google Benchmark (for benchmarks)

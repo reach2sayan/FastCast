@@ -87,7 +87,7 @@ static void BM_DynamicCast_Ptr_Success(benchmark::State &state) {
     benchmark::DoNotOptimize(dynamic_cast<SimpleB *>(a));
   }
 }
-BENCHMARK(BM_DynamicCast_Ptr_Success)->Arg(DefaultInnerIterations);
+BENCHMARK(BM_DynamicCast_Ptr_Success);
 
 static void BM_FastDynamicCast_Ptr_Success(benchmark::State &state) {
   SimpleB b;
@@ -96,7 +96,7 @@ static void BM_FastDynamicCast_Ptr_Success(benchmark::State &state) {
     benchmark::DoNotOptimize(fast_cast<SimpleB *>(a));
   }
 }
-BENCHMARK(BM_FastDynamicCast_Ptr_Success)->Arg(DefaultInnerIterations);
+BENCHMARK(BM_FastDynamicCast_Ptr_Success);
 
 static void BM_DynamicCast_Ptr_Failure(benchmark::State &state) {
   SimpleA a;
@@ -105,7 +105,7 @@ static void BM_DynamicCast_Ptr_Failure(benchmark::State &state) {
     benchmark::DoNotOptimize(dynamic_cast<SimpleB *>(ap));
   }
 }
-BENCHMARK(BM_DynamicCast_Ptr_Failure)->Arg(DefaultInnerIterations);
+BENCHMARK(BM_DynamicCast_Ptr_Failure);
 
 static void BM_FastDynamicCast_Ptr_Failure(benchmark::State &state) {
   SimpleA a;
@@ -114,7 +114,7 @@ static void BM_FastDynamicCast_Ptr_Failure(benchmark::State &state) {
     benchmark::DoNotOptimize(fast_cast<SimpleB *>(ap));
   }
 }
-BENCHMARK(BM_FastDynamicCast_Ptr_Failure)->Arg(DefaultInnerIterations);
+BENCHMARK(BM_FastDynamicCast_Ptr_Failure);
 
 static void BM_DynamicCast_Reused(benchmark::State &state) {
   SimpleB b;
@@ -123,7 +123,7 @@ static void BM_DynamicCast_Reused(benchmark::State &state) {
     benchmark::DoNotOptimize(dynamic_cast<SimpleB &>(a));
   }
 }
-BENCHMARK(BM_DynamicCast_Reused)->Arg(DefaultInnerIterations);
+BENCHMARK(BM_DynamicCast_Reused);
 
 static void BM_FastDynamicCast_Reused(benchmark::State &state) {
   SimpleB b;
@@ -132,7 +132,7 @@ static void BM_FastDynamicCast_Reused(benchmark::State &state) {
     benchmark::DoNotOptimize(fast_cast<SimpleB &>(a));
   }
 }
-BENCHMARK(BM_FastDynamicCast_Reused)->Arg(DefaultInnerIterations);
+BENCHMARK(BM_FastDynamicCast_Reused);
 
 // Multi-thread stress
 BENCHMARK(BM_DynamicCast_Reused)->Threads(2)->Threads(4)->Threads(8);
@@ -152,6 +152,48 @@ BENCHMARK(BM_FastDynamicCast_Complex)
     ->Arg(DefaultInnerIterations)
     ->Threads(2)
     ->Unit(benchmark::kMillisecond);
+
+static constexpr size_t kColdTypes = 5;
+
+template <typename Cast>
+static inline void run_rotating(benchmark::State &state, bool rotate,
+                                Cast &&cast) {
+  ComplexC c;
+  ComplexD d;
+  ComplexE e;
+  ComplexF f;
+  ComplexG g;
+  ComplexA *objs[kColdTypes] = {&c, &d, &e, &f, &g};
+  size_t i = 0;
+  for (auto _ : state) {
+    benchmark::DoNotOptimize(cast(objs[i]));
+    i = rotate ? (i + 1) % kColdTypes : 0;
+  }
+}
+
+static void BM_FastDynamicCast_Cold(benchmark::State &state) {
+  run_rotating(state, /*rotate=*/true,
+               [](ComplexA *p) { return fast_cast<ComplexB *>(p); });
+}
+BENCHMARK(BM_FastDynamicCast_Cold);
+
+static void BM_FastDynamicCast_Hot(benchmark::State &state) {
+  run_rotating(state, /*rotate=*/false,
+               [](ComplexA *p) { return fast_cast<ComplexB *>(p); });
+}
+BENCHMARK(BM_FastDynamicCast_Hot);
+
+static void BM_DynamicCast_Cold(benchmark::State &state) {
+  run_rotating(state, /*rotate=*/true,
+               [](ComplexA *p) { return dynamic_cast<ComplexB *>(p); });
+}
+BENCHMARK(BM_DynamicCast_Cold);
+
+static void BM_DynamicCast_Hot(benchmark::State &state) {
+  run_rotating(state, /*rotate=*/false,
+               [](ComplexA *p) { return dynamic_cast<ComplexB *>(p); });
+}
+BENCHMARK(BM_DynamicCast_Hot);
 
 static void BM_DerivedToBase_FastCast(benchmark::State &state) {
   Derived d;

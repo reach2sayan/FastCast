@@ -38,9 +38,9 @@ FASTCAST_CONSTEXPR inline To cast_impl(From *ptr) {
     return static_cast<To>(ptr);
   } else {
     static_assert(std::is_polymorphic_v<From>, "Type is not polymorphic!");
-    if (!ptr)
+    if (!ptr) {
       return nullptr;
-
+    }
     constexpr std::ptrdiff_t NO_OFFSET =
         std::numeric_limits<std::ptrdiff_t>::max();
     constexpr std::ptrdiff_t FAILED_OFFSET =
@@ -97,8 +97,9 @@ template <typename To, typename From>
   requires std::is_reference_v<To>
 constexpr inline To fast_cast(From &ref) {
   using ToPtr = std::add_pointer_t<std::remove_reference_t<To>>;
-  if (auto casted = fast_cast<ToPtr>(&ref))
+  if (auto casted = fast_cast<ToPtr>(&ref)) {
     return *casted;
+  }
   throw std::bad_cast{};
 }
 
@@ -106,8 +107,9 @@ constexpr inline To fast_cast(From &ref) {
 template <typename To, typename From>
 constexpr inline std::shared_ptr<To>
 fast_dynamic_pointer_cast(const std::shared_ptr<From> &ptr) {
-  if (auto raw = fast_cast<To *>(ptr.get()))
+  if (auto raw = fast_cast<To *>(ptr.get())) {
     return std::shared_ptr<To>(ptr, raw);
+  }
   return nullptr;
 }
 

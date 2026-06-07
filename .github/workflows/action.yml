@@ -1,109 +1,77 @@
 name: CMake
+
 on:
   push:
     branches: [ "main" ]
   pull_request:
     branches: [ "main" ]
+
 permissions:
   contents: read
+
 jobs:
   build:
+    name: ${{ matrix.os }} / ${{ matrix.cpp_compiler }} (C++${{ matrix.std }})
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
       matrix:
         include:
+          # GCC builds at C++23 to also exercise the constexpr code path.
           - os: ubuntu-latest
-            build_type: Release
             c_compiler: gcc
             cpp_compiler: g++
+            std: 23
+            cmake_args: "-G Ninja -DCMAKE_C_COMPILER=gcc -DCMAKE_CXX_COMPILER=g++ -DCMAKE_BUILD_TYPE=Release"
 
           - os: ubuntu-latest
-            build_type: Release
             c_compiler: clang
             cpp_compiler: clang++
+            std: 20
+            cmake_args: "-G Ninja -DCMAKE_C_COMPILER=clang -DCMAKE_CXX_COMPILER=clang++ -DCMAKE_BUILD_TYPE=Release"
 
-          #- os: windows-latest
-          #  build_type: Release
-          #  c_compiler: cl
-          #  cpp_compiler: cl
+          # MSVC uses the default Visual Studio (multi-config) generator.
+          - os: windows-latest
+            c_compiler: cl
+            cpp_compiler: cl
+            std: 20
+            cmake_args: "-A x64"
 
     steps:
       - uses: actions/checkout@v4
 
-      - name: Cache apt packages
-        uses: actions/cache@v3
-        with:
-          path: /var/cache/apt/archives
-          key: ${{ runner.os }}-apt-${{ hashFiles('**/CMakeLists.txt') }}
-          restore-keys: |
-            ${{ runner.os }}-apt-
-
       - name: Install dependencies (Linux)
         if: runner.os == 'Linux'
         run: |
-          sudo apt-get update 
-          sudo apt-get install -y cmake ninja-build build-essential
-          if [[ "${{ matrix.c_compiler }}" == "clang" ]]; then
-            sudo apt-get install -y clang lld
+          sudo apt-get update
+          sudo apt-get install -y ninja-build
+          if [ "${{ matrix.c_compiler }}" = "clang" ]; then
+            sudo apt-get install -y clang
           fi
 
-      - name: Cache CMake files
-        uses: actions/cache@v3
-        with:
-          path: |
-            ~/.cmake
-            ${{ github.workspace }}/build/CMakeCache.txt
-            ${{ github.workspace }}/build/CMakeFiles
-          key: ${{ runner.os }}-cmake-${{ hashFiles('CMakeLists.txt', '**/*.cmake') }}
-          restore-keys: |
-            ${{ runner.os }}-cmake-
-
-      - name: Set reusable strings
-        id: strings
-        shell: bash
-        run: |
-          echo "build-output-dir=${GITHUB_WORKSPACE}/build" >> "$GITHUB_OUTPUT"
-
-      - name: Create build directory
-        run: cmake -E make_directory ${{ steps.strings.outputs.build-output-dir }}
-
-      - name: Configure CMake (Linux)
-        if: runner.os == 'Linux'
-        run: |
-          cmake -B ${{ steps.strings.outputs.build-output-dir }} \
-            -DCMAKE_CXX_STANDARD=20 \
-            -DCMAKE_CXX_COMPILER=${{ matrix.cpp_compiler }} \
-            -DCMAKE_C_COMPILER=${{ matrix.c_compiler }} \
-            -DCMAKE_BUILD_TYPE=${{ matrix.build_type }} \
-            -G Ninja \
-            -S ${{ github.workspace }}
-
-      - name: Cache build
-        uses: actions/cache@v3
-        with:
-          path: ${{ github.workspace }}/build
-          key: ${{ runner.os }}-build-${{ hashFiles('**/*.cpp', '**/*.hpp', '**/*.h') }}
-          restore-keys: |
-            ${{ runner.os }}-build-
+      - name: Configure
+        run: >
+          cmake -B build -S .
+          ${{ matrix.cmake_args }}
+          -DCMAKE_CXX_STANDARD=${{ matrix.std }}
 
       - name: Build
-        run: cmake --build ${{ steps.strings.outputs.build-output-dir }} --config ${{ matrix.build_type }}
+        run: cmake --build build --config Release
 
       - name: Test
-        working-directory: ${{ steps.strings.outputs.build-output-dir }}
-        run: ctest --build-config ${{ matrix.build_type }}
+        run: ctest --test-dir build --build-config Release --output-on-failure
 
-      - name: Run tests
-        working-directory: ${{ steps.strings.outputs.build-output-dir }}
-        run: ./tests
-
+      # Benchmarks are timing-sensitive, so only run/publish them on Linux.
+      # The 'measure' target is still compiled on every platform by the Build
+      # step above, which keeps the benchmark code itself building under MSVC.
       - name: Run benchmarks
-        working-directory: ${{ steps.strings.outputs.build-output-dir }}
+        if: runner.os == 'Linux'
+        working-directory: build
         run: ./measure --benchmark_format=console --benchmark_out=benchmark_results.json
 
       - name: Upload benchmark results
+        if: runner.os == 'Linux'
         uses: actions/upload-artifact@v4
         with:
-            name: benchmark-results
-            path: benchmark_results.json
+          name: benchmark-results-${{ matrix.os }}-${{ matrix.c_compiler }}
+          path: build/benchmark_results.json

@@ -3,183 +3,161 @@
 //
 
 // fastcast_test.cpp
-#define BOOST_TEST_MODULE FastCastTests
 #include "../fastcast.hpp"
 #include "utilities.hpp"
-#include <boost/test/included/unit_test.hpp>
+#include <catch2/catch_test_macros.hpp>
 
-BOOST_AUTO_TEST_SUITE(FastCastChecks)
-
-BOOST_AUTO_TEST_CASE(SimpleHierarchy_DynamicVsFast) {
+TEST_CASE("SimpleHierarchy_DynamicVsFast", "[fastcast]") {
   SimpleB b;
   SimpleA &a = b;
   SimpleB &db = dynamic_cast<SimpleB &>(a);
-  BOOST_CHECK_EQUAL(db.method_b_only(), 42);
+  CHECK(db.method_b_only() == 42);
   SimpleB &fb = fast_cast<SimpleB &>(a);
-  BOOST_CHECK_EQUAL(fb.method_b_only(), 42);
+  CHECK(fb.method_b_only() == 42);
 }
 
-BOOST_AUTO_TEST_CASE(SimpleHierarchy_PointerNullCheck) {
+TEST_CASE("SimpleHierarchy_PointerNullCheck", "[fastcast]") {
   SimpleA *ap = nullptr;
-  BOOST_CHECK(dynamic_cast<SimpleB *>(ap) == nullptr);
-  BOOST_CHECK(fast_cast<SimpleB *>(ap) == nullptr);
+  CHECK(dynamic_cast<SimpleB *>(ap) == nullptr);
+  CHECK(fast_cast<SimpleB *>(ap) == nullptr);
 }
 
-BOOST_AUTO_TEST_CASE(ComplexHierarchy_DynamicVsFast) {
+TEST_CASE("ComplexHierarchy_DynamicVsFast", "[fastcast]") {
   ComplexG g;
   ComplexA &a = g;
   ComplexG &dg = dynamic_cast<ComplexG &>(a);
   ComplexG &fg = fast_cast<ComplexG &>(a);
-  BOOST_CHECK_EQUAL(dg.method_g_only(), 1729);
-  BOOST_CHECK_EQUAL(fg.method_g_only(), 1729);
+  CHECK(dg.method_g_only() == 1729);
+  CHECK(fg.method_g_only() == 1729);
 }
 
-BOOST_AUTO_TEST_CASE(ComplexHierarchy_PointerNullCheck) {
+TEST_CASE("ComplexHierarchy_PointerNullCheck", "[fastcast]") {
   ComplexA *ap = nullptr;
-  BOOST_CHECK(dynamic_cast<ComplexG *>(ap) == nullptr);
-  BOOST_CHECK(fast_cast<ComplexG *>(ap) == nullptr);
+  CHECK(dynamic_cast<ComplexG *>(ap) == nullptr);
+  CHECK(fast_cast<ComplexG *>(ap) == nullptr);
 }
 
-BOOST_AUTO_TEST_CASE(ComplexHierarchy_CrossCast) {
+TEST_CASE("ComplexHierarchy_CrossCast", "[fastcast]") {
   ComplexG g;
   ComplexA &a = g;
   // Cross-cast down to ComplexF through ComplexA
   ComplexF *df = dynamic_cast<ComplexF *>(&a);
   ComplexF *ff = fast_cast<ComplexF *>(&a);
 
-  BOOST_REQUIRE(df != nullptr);
-  BOOST_REQUIRE(ff != nullptr);
-  BOOST_CHECK_EQUAL(df->method(), ff->method());
+  REQUIRE(df != nullptr);
+  REQUIRE(ff != nullptr);
+  CHECK(df->method() == ff->method());
 }
 
-BOOST_AUTO_TEST_CASE(Simple_Success_Ptr) {
+TEST_CASE("Simple_Success_Ptr", "[fastcast]") {
   SimpleB b;
   SimpleA *a = &b;
 
   auto *bp = dynamic_cast<SimpleB *>(a);
   auto *fp = fast_cast<SimpleB *>(a);
 
-  BOOST_REQUIRE(bp != nullptr);
-  BOOST_REQUIRE(fp != nullptr);
-  BOOST_CHECK_EQUAL(bp->method_b_only(), 42);
-  BOOST_CHECK_EQUAL(fp->method_b_only(), 42);
+  REQUIRE(bp != nullptr);
+  REQUIRE(fp != nullptr);
+  CHECK(bp->method_b_only() == 42);
+  CHECK(fp->method_b_only() == 42);
 }
 
-BOOST_AUTO_TEST_CASE(Simple_Failure_PtrNull) {
+TEST_CASE("Simple_Failure_PtrNull", "[fastcast]") {
   SimpleA *a = new SimpleA{};
-  BOOST_CHECK(dynamic_cast<SimpleB *>(a) == nullptr);
-  BOOST_CHECK(fast_cast<SimpleB *>(a) == nullptr);
+  CHECK(dynamic_cast<SimpleB *>(a) == nullptr);
+  CHECK(fast_cast<SimpleB *>(a) == nullptr);
   delete a;
 }
 
-BOOST_AUTO_TEST_CASE(Simple_Failure_BadCastRef) {
+TEST_CASE("Simple_Failure_BadCastRef", "[fastcast]") {
   SimpleA a;
-  try {
-    (void)dynamic_cast<SimpleB &>(a);
-    BOOST_FAIL("Expected std::bad_cast");
-  } catch (const std::bad_cast &) {
-    BOOST_CHECK(true);
-  }
-  try {
-    (void)fast_cast<SimpleB &>(a);
-    BOOST_FAIL("Expected std::bad_cast");
-  } catch (const std::bad_cast &) {
-    BOOST_CHECK(true);
-  }
+  CHECK_THROWS_AS((void)dynamic_cast<SimpleB &>(a), std::bad_cast);
+  CHECK_THROWS_AS((void)fast_cast<SimpleB &>(a), std::bad_cast);
 }
 
-BOOST_AUTO_TEST_CASE(Simple_ConstCorrectness) {
+TEST_CASE("Simple_ConstCorrectness", "[fastcast]") {
   const SimpleB b;
   const SimpleA &a = b;
   auto &br = dynamic_cast<const SimpleB &>(a);
   auto &fr = fast_cast<const SimpleB &>(a);
-  BOOST_CHECK_EQUAL(br.method_b_only(), fr.method_b_only());
+  CHECK(br.method_b_only() == fr.method_b_only());
 }
 
-BOOST_AUTO_TEST_CASE(Complex_Success_Ref) {
+TEST_CASE("Complex_Success_Ref", "[fastcast]") {
   ComplexE w;
   ComplexA &x = w;
 
   auto &dr = dynamic_cast<ComplexE &>(x);
   auto &fr = fast_cast<ComplexE &>(x);
 
-  BOOST_CHECK_EQUAL(dr.method(), 2520);
-  BOOST_CHECK_EQUAL(fr.method(), 2520);
+  CHECK(dr.method() == 2520);
+  CHECK(fr.method() == 2520);
 }
 
-BOOST_AUTO_TEST_CASE(Complex_Success_CrossCast) {
+TEST_CASE("Complex_Success_CrossCast", "[fastcast]") {
   ComplexE w;
   ComplexA *x = &w;
 
   auto *dz = dynamic_cast<ComplexB *>(x);
   auto *fz = fast_cast<ComplexB *>(x);
 
-  BOOST_REQUIRE(dz != nullptr);
-  BOOST_REQUIRE(fz != nullptr);
-  BOOST_CHECK_EQUAL(dz->method(), fz->method());
+  REQUIRE(dz != nullptr);
+  REQUIRE(fz != nullptr);
+  CHECK(dz->method() == fz->method());
 }
 
-BOOST_AUTO_TEST_CASE(Complex_Failure_NullPtr) {
+TEST_CASE("Complex_Failure_NullPtr", "[fastcast]") {
   ComplexA *x = nullptr;
-  BOOST_CHECK(dynamic_cast<ComplexF *>(x) == nullptr);
-  BOOST_CHECK(fast_cast<ComplexF *>(x) == nullptr);
+  CHECK(dynamic_cast<ComplexF *>(x) == nullptr);
+  CHECK(fast_cast<ComplexF *>(x) == nullptr);
 }
 
-BOOST_AUTO_TEST_CASE(Complex_Failure_Unrelated) {
+TEST_CASE("Complex_Failure_Unrelated", "[fastcast]") {
   ComplexE w;
   ComplexB &z1 = w;
-  try {
-    (void)dynamic_cast<ComplexG &>(
-        reinterpret_cast<ComplexA &>(z1)); // unrelated
-    BOOST_FAIL("Expected std::bad_cast");
-  } catch (const std::bad_cast &) {
-    BOOST_CHECK(true);
-  }
-  try {
-    (void)fast_cast<ComplexF &>(reinterpret_cast<ComplexA &>(z1));
-    BOOST_FAIL("Expected std::bad_cast");
-  } catch (const std::bad_cast &) {
-    BOOST_CHECK(true);
-  }
+  CHECK_THROWS_AS((void)dynamic_cast<ComplexG &>(
+                      reinterpret_cast<ComplexA &>(z1)), // unrelated
+                  std::bad_cast);
+  CHECK_THROWS_AS(
+      (void)fast_cast<ComplexF &>(reinterpret_cast<ComplexA &>(z1)),
+      std::bad_cast);
 }
 
-BOOST_AUTO_TEST_CASE(SameType) {
+TEST_CASE("SameType", "[fastcast]") {
   Derived d;
   Derived *dp = &d;
   auto r1 = fastcast::fast_cast<Derived *>(dp);
-  BOOST_CHECK(r1 == dp);
+  CHECK(r1 == dp);
 }
 
-BOOST_AUTO_TEST_CASE(DerivedToBase_StaticCastPath) {
+TEST_CASE("DerivedToBase_StaticCastPath", "[fastcast]") {
   Derived d;
   Derived *dp = &d;
   Base *bp = fastcast::fast_cast<Base *>(dp);
-  BOOST_CHECK(bp == static_cast<Base *>(dp));
+  CHECK(bp == static_cast<Base *>(dp));
 }
 
-BOOST_AUTO_TEST_CASE(BaseToDerived_RuntimePath) {
+TEST_CASE("BaseToDerived_RuntimePath", "[fastcast]") {
   Derived d;
   Base *bp = &d;
   auto dp = fastcast::fast_cast<Derived *>(bp);
-  BOOST_CHECK(dp == dynamic_cast<Derived *>(bp));
+  CHECK(dp == dynamic_cast<Derived *>(bp));
 }
 
-BOOST_AUTO_TEST_CASE(MultipleInheritance_Failure) {
+TEST_CASE("MultipleInheritance_Failure", "[fastcast]") {
   Multi m;
   Base *bp = &m;
   auto ap = fastcast::fast_cast<AnotherBase *>(bp);
-  BOOST_CHECK(ap == dynamic_cast<AnotherBase *>(bp));
+  CHECK(ap == dynamic_cast<AnotherBase *>(bp));
 }
 
-BOOST_AUTO_TEST_CASE(FailureCaching) {
+TEST_CASE("FailureCaching", "[fastcast]") {
   Base b;
   Base *bp = &b;
   auto dp = fastcast::fast_cast<Derived *>(bp);
-  BOOST_CHECK(dp == nullptr);
+  CHECK(dp == nullptr);
 
   // call again, should hit failure cache fast
   auto dp2 = fastcast::fast_cast<Derived *>(bp);
-  BOOST_CHECK(dp2 == nullptr);
+  CHECK(dp2 == nullptr);
 }
-
-BOOST_AUTO_TEST_SUITE_END()

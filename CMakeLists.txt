@@ -34,20 +34,18 @@ endif ()
 if (FASTCAST_BUILD_TESTS)
     enable_testing()
 
-    set(BOOST_INCLUDE_LIBRARIES test)
-    set(BOOST_ENABLE_CMAKE ON)
     FetchContent_Declare(
-            Boost
-            GIT_REPOSITORY https://github.com/boostorg/boost.git
-            GIT_TAG boost-1.86.0
+            Catch2
+            GIT_REPOSITORY https://github.com/catchorg/Catch2.git
+            GIT_TAG v3.7.1
             GIT_SHALLOW ON
             DOWNLOAD_EXTRACT_TIMESTAMP TRUE
             EXCLUDE_FROM_ALL)
-    FetchContent_MakeAvailable(Boost)
+    FetchContent_MakeAvailable(Catch2)
 
     add_executable(tests tests/tests.cpp)
     target_link_libraries(tests PRIVATE
-            FastCast fastcast_warnings Boost::unit_test_framework)
+            FastCast fastcast_warnings Catch2::Catch2WithMain)
 
     add_test(NAME tests COMMAND tests)
 endif ()

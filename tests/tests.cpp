@@ -8,6 +8,14 @@
 #include "catch.hpp"
 #include "utilities.hpp"
 
+TEST_CASE("Version", "[fastcast]") {
+  CHECK(FASTCAST_VERSION_MAJOR == 1);
+  CHECK(FASTCAST_VERSION_MINOR == 0);
+  CHECK(FASTCAST_VERSION_PATCH == 0);
+  CHECK(FASTCAST_VERSION == 10000);
+  CHECK(std::string(FASTCAST_VERSION_STRING) == "1.0.0");
+}
+
 TEST_CASE("SimpleHierarchy_DynamicVsFast", "[fastcast]") {
   SimpleB b;
   SimpleA &a = b;

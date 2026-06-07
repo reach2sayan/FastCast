@@ -4,6 +4,14 @@
 
 #pragma once
 
+#define FASTCAST_VERSION_MAJOR 1
+#define FASTCAST_VERSION_MINOR 0
+#define FASTCAST_VERSION_PATCH 0
+#define FASTCAST_VERSION                                                        \
+  (FASTCAST_VERSION_MAJOR * 10000 + FASTCAST_VERSION_MINOR * 100 +             \
+   FASTCAST_VERSION_PATCH)
+#define FASTCAST_VERSION_STRING "1.0.0"
+
 #include <cstddef>
 #include <cstdint>
 #include <cstring>

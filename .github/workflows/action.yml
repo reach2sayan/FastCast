@@ -61,6 +61,18 @@ jobs:
       - name: Test
         run: ctest --test-dir build --build-config Release --output-on-failure
 
+      # Pin the CPU to the performance governor so the timing-sensitive
+      # benchmarks aren't skewed by frequency scaling. Hosted runners are often
+      # virtualized and don't expose cpufreq, so this is best-effort.
+      - name: Set CPU governor to performance
+        if: runner.os == 'Linux'
+        run: |
+          if echo performance | sudo tee /sys/devices/system/cpu/cpu*/cpufreq/scaling_governor >/dev/null 2>&1; then
+            echo "Governor set to performance."
+          else
+            echo "cpufreq not available on this runner; continuing with default."
+          fi
+
       # Benchmarks are timing-sensitive, so only run/publish them on Linux.
       # The 'measure' target is still compiled on every platform by the Build
       # step above, which keeps the benchmark code itself building under MSVC.

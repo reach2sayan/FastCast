@@ -97,8 +97,11 @@ if (FASTCAST_BUILD_TESTS)
     add_executable(tests tests/tests.cpp)
     target_link_libraries(tests PRIVATE
             FastCast fastcast_dev_flags Threads::Threads)
-    # The vendored Catch2 header is not ours to keep warning-clean.
-    if (NOT MSVC)
+    # The vendored Catch2 v2 header is not ours to keep warning-clean.
+    if (MSVC)
+        # C5311: `operator "" _x` spelling deprecated (MSVC 17.14+, /std:c++latest).
+        target_compile_options(tests PRIVATE /wd5311)
+    else ()
         target_compile_options(tests PRIVATE -Wno-conversion -Wno-sign-conversion)
     endif ()
     add_test(NAME tests COMMAND tests)

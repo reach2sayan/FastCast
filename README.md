@@ -1,6 +1,16 @@
-[![CMake](https://github.com/reach2sayan/FastCast/actions/workflows/action.yml/badge.svg)](https://github.com/reach2sayan/FastCast/actions/workflows/action.yml)
-[![C++11+](https://img.shields.io/badge/C%2B%2B-11%20%E2%80%A6%2023-%2300599C.svg?logo=c%2B%2B&logoColor=white)](#language-and-compiler-support)
-[![Header-only](https://img.shields.io/badge/header--only-yes-brightgreen.svg)](#installation)
+<!-- status -->
+[![CI](https://github.com/reach2sayan/FastCast/actions/workflows/action.yml/badge.svg?branch=main)](https://github.com/reach2sayan/FastCast/actions/workflows/action.yml)
+[![Release](https://github.com/reach2sayan/FastCast/actions/workflows/release.yml/badge.svg)](https://github.com/reach2sayan/FastCast/actions/workflows/release.yml)
+[![Latest release](https://img.shields.io/github/v/release/reach2sayan/FastCast?sort=semver&display_name=tag&logo=github)](https://github.com/reach2sayan/FastCast/releases/latest)
+[![NuGet](https://img.shields.io/nuget/v/FastCast?logo=nuget)](https://www.nuget.org/packages/FastCast)
+[![NuGet downloads](https://img.shields.io/nuget/dt/FastCast?logo=nuget&label=nuget%20downloads)](https://www.nuget.org/packages/FastCast)
+[![Release downloads](https://img.shields.io/github/downloads/reach2sayan/FastCast/total?logo=github&label=release%20downloads)](https://github.com/reach2sayan/FastCast/releases)
+<!-- facts -->
+[![C++11 … C++23](https://img.shields.io/badge/C%2B%2B-11%20%E2%80%A6%2023-%2300599C.svg?logo=c%2B%2B&logoColor=white)](#language-and-compiler-support)
+[![Header-only](https://img.shields.io/badge/header--only-single%20file-brightgreen.svg)](fastcast.hpp)
+[![Platforms](https://img.shields.io/badge/platforms-Linux%20%7C%20macOS%20%7C%20Windows-lightgrey.svg)](#language-and-compiler-support)
+[![Compilers](https://img.shields.io/badge/compilers-GCC%20%7C%20Clang%20%7C%20AppleClang%20%7C%20MSVC-lightgrey.svg)](#language-and-compiler-support)
+[![Sanitizers](https://img.shields.io/badge/tested%20with-ASan%20%7C%20UBSan-blueviolet.svg)](.github/workflows/action.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE.txt)
 
 # FastCast

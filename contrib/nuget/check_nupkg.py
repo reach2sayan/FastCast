@@ -9,7 +9,6 @@ import zipfile
 
 REQUIRED = ("build/native/FastCast.targets", "build/native/include/fastcast.hpp")
 
-
 def main() -> int:
     if len(sys.argv) != 2:
         print(__doc__, file=sys.stderr)
@@ -20,7 +19,6 @@ def main() -> int:
     for n in missing:
         print(f"missing: {n}", file=sys.stderr)
     return 1 if missing else 0
-
 
 if __name__ == "__main__":
     sys.exit(main())

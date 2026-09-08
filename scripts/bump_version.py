@@ -25,38 +25,28 @@ TESTS = ROOT / "tests" / "tests.cpp"
 CHANGELOG = ROOT / "CHANGELOG.md"
 REPO_URL = "https://github.com/reach2sayan/FastCast"
 
-
 def current():
     text = HEADER.read_text()
     parts = []
     for name in ("MAJOR", "MINOR", "PATCH"):
         m = re.search(rf"^#define FASTCAST_VERSION_{name} (\d+)$", text, re.M)
-        if not m:
-            sys.exit(f"FASTCAST_VERSION_{name} not found in {HEADER}")
+        if not m: sys.exit(f"FASTCAST_VERSION_{name} not found in {HEADER}")
         parts.append(int(m.group(1)))
     return tuple(parts)
 
-
 def bump(cur, how):
     major, minor, patch = cur
-    if how == "major":
-        return (major + 1, 0, 0)
-    if how == "minor":
-        return (major, minor + 1, 0)
-    if how == "patch":
-        return (major, minor, patch + 1)
+    if how == "major": return (major + 1, 0, 0)
+    if how == "minor": return (major, minor + 1, 0)
+    if how == "patch": return (major, minor, patch + 1)
     m = re.fullmatch(r"(\d+)\.(\d+)\.(\d+)", how)
-    if not m:
-        sys.exit(f"expected patch|minor|major or X.Y.Z, got {how!r}")
+    if not m: sys.exit(f"expected patch|minor|major or X.Y.Z, got {how!r}")
     return tuple(int(x) for x in m.groups())
-
 
 def sub_once(text, pattern, repl, where, flags=re.M):
     new, n = re.subn(pattern, repl, text, count=1, flags=flags)
-    if n != 1:
-        sys.exit(f"pattern not found in {where}: {pattern}")
+    if n != 1: sys.exit(f"pattern not found in {where}: {pattern}")
     return new
-
 
 def rewrite_header(new):
     text = HEADER.read_text()
@@ -66,7 +56,6 @@ def rewrite_header(new):
     text = sub_once(text, r'^(#define FASTCAST_VERSION_STRING) "\d+\.\d+\.\d+"$',
                     rf'\g<1> "{fmt(new)}"', HEADER)
     HEADER.write_text(text)
-
 
 def rewrite_tests(new):
     text = TESTS.read_text()
@@ -80,7 +69,6 @@ def rewrite_tests(new):
                     rf'\g<1> "{fmt(new)}");', TESTS)
     TESTS.write_text(text)
 
-
 def rewrite_changelog(cur, new):
     text = CHANGELOG.read_text()
     today = datetime.date.today().isoformat()
@@ -93,10 +81,7 @@ def rewrite_changelog(cur, new):
                     CHANGELOG)
     CHANGELOG.write_text(text)
 
-
-def fmt(v):
-    return ".".join(str(x) for x in v)
-
+def fmt(v): return ".".join(str(x) for x in v)
 
 def main(argv):
     args = [a for a in argv if not a.startswith("--")]
@@ -108,7 +93,9 @@ def main(argv):
     if len(args) != 1:
         print(__doc__, file=sys.stderr)
         return 2
+    
     new = bump(cur, args[0])
+    
     if new <= cur:
         sys.exit(f"new version {fmt(new)} is not greater than current {fmt(cur)}")
     print(fmt(new))
@@ -118,7 +105,6 @@ def main(argv):
     rewrite_tests(new)
     rewrite_changelog(cur, new)
     return 0
-
 
 if __name__ == "__main__":
     sys.exit(main(sys.argv[1:]))

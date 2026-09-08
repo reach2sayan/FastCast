@@ -1,0 +1,142 @@
+# Tarballs and a native NuGet package, attached to a GitHub Release.
+# A tag `vX.Y.Z` builds and publishes -- it must name the version in
+# fastcast.hpp; a manual run on a branch builds the same artifacts and
+# publishes nothing, which is how a change to the pipeline is tried before a
+# version rides on it.  The NuGet package also goes to nuget.org by trusted
+# publishing (OIDC, no stored API key) when the NUGET_USER repository variable
+# names the nuget.org profile; without it the .nupkg rides the GitHub Release
+# alone.  See README.md "Releasing" for the one-time nuget.org setup.
+#
+#   git tag -a v1.1.0 -m "FastCast 1.1.0"
+#   git push origin v1.1.0
+#
+# Assets:
+#   FastCast-<version>.tar.gz / .zip   installable tree (include/, lib/cmake/, share/doc/)
+#   FastCast-<version>-src.tar.gz      full source tree (tests, benchmarks, examples)
+#   FastCast.<version>.nupkg           header-only NuGet package for MSVC projects
+#   fastcast.hpp                       the single header, for people who just want the file
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  # First and cheap: a tag that does not name the header's version stops here.
+  version:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.read.outputs.version }}
+    steps:
+      - uses: actions/checkout@v5
+      - id: read
+        run: |
+          major=$(sed -nE 's/^#define FASTCAST_VERSION_MAJOR ([0-9]+)$/\1/p' fastcast.hpp)
+          minor=$(sed -nE 's/^#define FASTCAST_VERSION_MINOR ([0-9]+)$/\1/p' fastcast.hpp)
+          patch=$(sed -nE 's/^#define FASTCAST_VERSION_PATCH ([0-9]+)$/\1/p' fastcast.hpp)
+          version="$major.$minor.$patch"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "fastcast.hpp says $version; ref is $GITHUB_REF_NAME"
+          if [[ "$GITHUB_REF_TYPE" == tag && "$GITHUB_REF_NAME" != "v$version" ]]; then
+            echo "::error::tag $GITHUB_REF_NAME does not name fastcast.hpp's version $version"
+            exit 1
+          fi
+
+  # The CPack tarballs: the installed tree (what find_package consumes) and
+  # the full source tree.  Tests run first so a broken tag never packages.
+  package:
+    needs: version
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - run: sudo apt-get update && sudo apt-get install -y ninja-build
+      - name: Build and test
+        run: |
+          cmake -B build -S . -G Ninja -DCMAKE_BUILD_TYPE=Release \
+            -DFASTCAST_BUILD_BENCHMARKS=OFF -DFASTCAST_WARNINGS_AS_ERRORS=ON
+          cmake --build build
+          ctest --test-dir build --output-on-failure
+      - name: Package
+        working-directory: build
+        run: |
+          cpack -G "TGZ;ZIP"
+          cpack --config CPackSourceConfig.cmake
+          ls -l FastCast-*
+      - uses: actions/upload-artifact@v6
+        with:
+          name: tarballs
+          path: |
+            build/FastCast-*.tar.gz
+            build/FastCast-*.zip
+
+  # The native package for MSVC consumers: the header plus a .targets that
+  # adds the include path.  Header-only, so no binaries and no configurations;
+  # nuget.exe is preinstalled on the Windows runners.
+  nuget:
+    needs: version
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v5
+      - name: Pack
+        run: nuget pack contrib/nuget/FastCast.nuspec -Version ${{ needs.version.outputs.version }} -BasePath . -OutputDirectory nupkg -NonInteractive
+      - name: Smoke-test the package layout
+        shell: bash
+        run: python contrib/nuget/check_nupkg.py nupkg/*.nupkg
+      - uses: actions/upload-artifact@v6
+        with:
+          name: nuget
+          path: nupkg/*.nupkg
+
+  release:
+    if: github.ref_type == 'tag'
+    needs: [version, package, nuget]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      id-token: write
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/download-artifact@v7
+        with:
+          path: dist
+          merge-multiple: true
+      - run: cp fastcast.hpp dist/ && ls -l dist
+
+      # Release notes: the CHANGELOG.md section for this version, with
+      # GitHub's generated notes (PRs, contributors) appended.
+      - name: Release notes
+        run: |
+          v="${{ needs.version.outputs.version }}"
+          awk -v v="$v" '
+            /^## / { if (found) exit; if (index($0, "[" v "]")) found = 1; next }
+            found { print }
+          ' CHANGELOG.md > notes.md
+          [ -s notes.md ] || echo "_No CHANGELOG.md entry for $v._" > notes.md
+          cat notes.md
+
+      - env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" dist/* \
+            --title "FastCast ${{ needs.version.outputs.version }}" \
+            --notes-file notes.md --generate-notes --verify-tag
+
+      # Trusted publishing: the job's OIDC token buys a one-hour single-use
+      # API key against the policy registered on nuget.org (owner reach2sayan,
+      # repo FastCast, workflow release.yml).  A variable rather than a secret
+      # so the steps can be skipped where it is unset -- a fork, or an account
+      # not yet configured -- and the .nupkg rides the GitHub release alone.
+      - name: NuGet login
+        if: vars.NUGET_USER != ''
+        id: nuget-login
+        uses: NuGet/login@v1
+        with:
+          user: ${{ vars.NUGET_USER }}
+
+      - name: Publish to nuget.org
+        if: vars.NUGET_USER != ''
+        run: dotnet nuget push dist/*.nupkg --api-key "${{ steps.nuget-login.outputs.NUGET_API_KEY }}" --source https://api.nuget.org/v3/index.json --skip-duplicate

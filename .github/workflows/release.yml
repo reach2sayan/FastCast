@@ -32,7 +32,7 @@ jobs:
     outputs:
       version: ${{ steps.read.outputs.version }}
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
       - id: read
         run: |
           major=$(sed -nE 's/^#define FASTCAST_VERSION_MAJOR ([0-9]+)$/\1/p' fastcast.hpp)
@@ -52,7 +52,7 @@ jobs:
     needs: version
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
       - run: sudo apt-get update && sudo apt-get install -y ninja-build
       - name: Build and test
         run: |
@@ -80,7 +80,7 @@ jobs:
     needs: version
     runs-on: windows-latest
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
       - name: Pack
         run: nuget pack contrib/nuget/FastCast.nuspec -Version ${{ needs.version.outputs.version }} -BasePath . -OutputDirectory nupkg -NonInteractive
       - name: Smoke-test the package layout
@@ -99,7 +99,7 @@ jobs:
       contents: write
       id-token: write
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
       - uses: actions/download-artifact@v7
         with:
           path: dist

@@ -69,3 +69,7 @@ venv/
 # --- OS ---------------------------------------------------------------------
 .DS_Store
 Thumbs.db
+
+# --- release deploy key (private half lives in the RELEASE_DEPLOY_KEY secret) ---
+*_release_key
+*_release_key.pub

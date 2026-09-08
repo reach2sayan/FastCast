@@ -1,0 +1,64 @@
+# Every Monday, main becomes a release: the patch number in fastcast.hpp goes
+# up by one (scripts/bump_version.py also rewrites the version test and turns
+# CHANGELOG.md's "[Unreleased]" into the new section), the bump is committed
+# and tagged, and Release builds and publishes the tarballs and the NuGet
+# package for that tag.  A week in which main did not move produces nothing
+# -- the test is whether HEAD is already the commit the latest tag names --
+# and a red main is never released: the CMake workflow must have passed on
+# HEAD.  "Run workflow" is the same thing on demand.
+#
+# The bump is pushed over SSH with the release-agent deploy key
+# (RELEASE_DEPLOY_KEY holds the private half): main is ruled "changes must be
+# made through a pull request", and deploy keys sit on that ruleset's bypass
+# list.  A deploy-key push also fires Release's tag trigger, which a push
+# made with the workflow's own token could not do.
+#
+# Minor and major bumps are made by hand (`scripts/bump_version.py minor`) and
+# tagged as before; the next Monday finds HEAD already tagged and does nothing.
+name: Weekly release
+
+on:
+  schedule:
+    - cron: "0 6 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+          ssh-key: ${{ secrets.RELEASE_DEPLOY_KEY }}
+
+      - name: Anything since the last tag?
+        id: since
+        run: |
+          last=$(git describe --tags --abbrev=0 --match 'v*' 2>/dev/null || true)
+          if [[ -n "$last" && $(git rev-parse "$last^{commit}") == $(git rev-parse HEAD) ]]; then
+            echo "main is still $last; nothing to release"
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Is main green?
+        if: steps.since.outputs.skip != 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          c=$(gh run list --workflow CMake --commit "$GITHUB_SHA" --branch main \
+                --json conclusion --jq '.[0].conclusion')
+          [[ "$c" == success ]] || { echo "::error::CMake workflow on $GITHUB_SHA: ${c:-no run}"; exit 1; }
+
+      - name: Bump, commit, tag, push
+        if: steps.since.outputs.skip != 'true'
+        run: |
+          new=$(python3 scripts/bump_version.py patch)
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -am "Release $new"
+          git tag -a "v$new" -m "FastCast $new"
+          git push --follow-tags origin HEAD:main

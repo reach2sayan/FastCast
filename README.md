@@ -430,15 +430,26 @@ A release is a tag. Pushing `vX.Y.Z` runs [`release.yml`](.github/workflows/rele
 4. publishes the `.nupkg` to nuget.org by **trusted publishing** — the job's OIDC token is
    exchanged for a short-lived API key by `NuGet/login`; no long-lived secret is stored.
 
-To cut one:
+Releases are cut **automatically every Monday** by
+[`weekly-release.yml`](.github/workflows/weekly-release.yml): if `main` has moved since the
+last tag and the CMake workflow passed on it, CI runs `scripts/bump_version.py patch`
+(header macros, the version test, and `CHANGELOG.md`'s *Unreleased* section become the new
+version), commits, tags `vX.Y.Z`, and pushes with the release deploy key, which triggers
+the pipeline above. A week without changes produces nothing. *Run workflow* does the same
+on demand.
+
+To cut one by hand, or for a minor/major bump:
+
 
 ```sh
-# 1. bump FASTCAST_VERSION_{MAJOR,MINOR,PATCH} and FASTCAST_VERSION_STRING in fastcast.hpp,
-#    the expected values in tests/tests.cpp, and add a "## [X.Y.Z] - date" section to CHANGELOG.md
-git commit -am "Release X.Y.Z"
-git tag -a vX.Y.Z -m "FastCast X.Y.Z"
-git push origin main vX.Y.Z
+scripts/bump_version.py minor        # or patch / major / an explicit X.Y.Z
+git commit -am "Release $(scripts/bump_version.py --show)"
+git tag -a "v$(scripts/bump_version.py --show)" -m "FastCast $(scripts/bump_version.py --show)"
+git push --follow-tags origin main
 ```
+
+Write the release notes into the *Unreleased* section of `CHANGELOG.md` as you go; the bump
+moves them under the new version heading.
 
 "Run workflow" on a branch builds the same artifacts and publishes nothing, which is how a
 change to the pipeline is tried before a version rides on it.
@@ -451,6 +462,15 @@ change to the pipeline is tried before a version rides on it.
 2. In the GitHub repository, **Settings → Secrets and variables → Actions → Variables**: add
    `NUGET_USER` = your nuget.org profile name. The publish steps are skipped while it is unset,
    so forks and dry runs never try to push.
+3. For the weekly release, a deploy key with write access, registered on the `main` ruleset's
+   bypass list, with its private half in the `RELEASE_DEPLOY_KEY` secret:
+   ```sh
+   ssh-keygen -t ed25519 -N "" -C "fastcast release agent" -f fastcast_release_key
+   gh api -X POST repos/reach2sayan/FastCast/keys -f title="release agent" \
+       -f key="$(cat fastcast_release_key.pub)" -F read_only=false
+   gh secret set RELEASE_DEPLOY_KEY < fastcast_release_key
+   ```
+   The key files are gitignored.
 
 ## Contributing
 

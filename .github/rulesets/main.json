@@ -54,6 +54,10 @@
       "actor_id": 5,
       "actor_type": "RepositoryRole",
       "bypass_mode": "always"
+    },
+    {
+      "actor_type": "DeployKey",
+      "bypass_mode": "always"
     }
   ]
 }

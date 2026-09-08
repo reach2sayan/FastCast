@@ -66,7 +66,7 @@ jobs:
           cpack -G "TGZ;ZIP"
           cpack --config CPackSourceConfig.cmake
           ls -l FastCast-*
-      - uses: actions/upload-artifact@v6
+      - uses: actions/upload-artifact@v7
         with:
           name: tarballs
           path: |
@@ -86,7 +86,7 @@ jobs:
       - name: Smoke-test the package layout
         shell: bash
         run: python contrib/nuget/check_nupkg.py nupkg/*.nupkg
-      - uses: actions/upload-artifact@v6
+      - uses: actions/upload-artifact@v7
         with:
           name: nuget
           path: nupkg/*.nupkg

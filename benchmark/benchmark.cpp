@@ -2,10 +2,12 @@
 // Created by sayan on 10/4/25.
 //
 
+// Benchmarks comparing fast_cast against dynamic_cast. See README.md for
+// how to run them and regenerate the plots.
+
 #include "../fastcast.hpp"
 #include "../tests/utilities.hpp"
 #include <benchmark/benchmark.h>
-#include <thread>
 
 constexpr size_t DefaultInnerIterations = 2000000;
 
@@ -22,8 +24,9 @@ static void BM_DynamicCast_Simple(benchmark::State &state) {
     for (size_t i = 0; i < iters; ++i) {
       SimpleB b;
       SimpleA &a = b;
-      // dynamic_cast to reference (like your original)
-      accumulated += dynamic_cast<SimpleB &>(a).method_b_only();
+      accumulated =
+          accumulated +
+          static_cast<size_t>(dynamic_cast<SimpleB &>(a).method_b_only());
     }
     benchmark::DoNotOptimize(accumulated);
   }
@@ -39,7 +42,8 @@ static void BM_FastDynamicCast_Simple(benchmark::State &state) {
     for (size_t i = 0; i < iters; ++i) {
       SimpleB b;
       SimpleA &a = b;
-      accumulated += fast_cast<SimpleB &>(a).method_b_only();
+      accumulated = accumulated + static_cast<size_t>(
+                                      fast_cast<SimpleB &>(a).method_b_only());
     }
     benchmark::DoNotOptimize(accumulated);
   }
@@ -55,7 +59,9 @@ static void BM_DynamicCast_Complex(benchmark::State &state) {
     for (size_t i = 0; i < iters; ++i) {
       ComplexG g;
       ComplexA &a = g;
-      accumulated += dynamic_cast<ComplexG &>(a).method_g_only();
+      accumulated =
+          accumulated +
+          static_cast<size_t>(dynamic_cast<ComplexG &>(a).method_g_only());
     }
     benchmark::DoNotOptimize(accumulated);
   }
@@ -71,7 +77,8 @@ static void BM_FastDynamicCast_Complex(benchmark::State &state) {
     for (size_t i = 0; i < iters; ++i) {
       ComplexG g;
       ComplexA &a = g;
-      accumulated += fast_cast<ComplexG &>(a).method_g_only();
+      accumulated = accumulated + static_cast<size_t>(
+                                      fast_cast<ComplexG &>(a).method_g_only());
     }
     benchmark::DoNotOptimize(accumulated);
   }
@@ -137,11 +144,6 @@ BENCHMARK(BM_FastDynamicCast_Reused);
 // Multi-thread stress
 BENCHMARK(BM_DynamicCast_Reused)->Threads(2)->Threads(4)->Threads(8);
 BENCHMARK(BM_FastDynamicCast_Reused)->Threads(2)->Threads(4)->Threads(8);
-
-BENCHMARK(BM_DynamicCast_Ptr_Success);
-BENCHMARK(BM_FastDynamicCast_Complex)
-    ->Arg(DefaultInnerIterations)
-    ->Unit(benchmark::kMillisecond);
 
 BENCHMARK(BM_DynamicCast_Complex)
     ->Arg(DefaultInnerIterations)

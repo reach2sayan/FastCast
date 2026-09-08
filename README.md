@@ -1,98 +1,319 @@
-[![CMake](https://github.com/reach2sayan/FastCast/actions/workflows/action.yml/badge.svg)](https://github.com/reach2sayan/FastCast/actions/workflows/action.yml) [![C++](https://img.shields.io/badge/C++-%2300599C.svg?logo=c%2B%2B&logoColor=white)](#)
+[![CMake](https://github.com/reach2sayan/FastCast/actions/workflows/action.yml/badge.svg)](https://github.com/reach2sayan/FastCast/actions/workflows/action.yml)
+[![C++11+](https://img.shields.io/badge/C%2B%2B-11%20%E2%80%A6%2023-%2300599C.svg?logo=c%2B%2B&logoColor=white)](#language-and-compiler-support)
+[![Header-only](https://img.shields.io/badge/header--only-yes-brightgreen.svg)](#installation)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE.txt)
 
 # FastCast
 
-**`fast_cast`** is a modern C++ header-only library providing a **high-performance polymorphic cast** alternative to
-`dynamic_cast`. It accelerates runtime type conversions in polymorphic hierarchies while maintaining safety and
-correctness.
+**`fast_cast`** is a header-only, C++11-compatible, drop-in replacement for
+`dynamic_cast` that caches the result of each cast per thread. Repeated casts of
+the same dynamic type become a single pointer comparison plus an addition, which is
+**35–50× faster than `dynamic_cast`** on a hot path, while returning exactly what
+`dynamic_cast` would return.
 
-The code is heavily inspired by [FastDynamicCast](https://github.com/tobspr/FastDynamicCast). This is effectively a
-modern C++ implementation of FastDynamicCast. This is the basic idea in a single image
+```cpp
+#include "fastcast.hpp"
+
+Shape *shape = get_shape();
+Circle *c = fast_cast<Circle *>(shape);      // nullptr if it is not a Circle
+Circle &r = fast_cast<Circle &>(*shape);     // throws std::bad_cast if not
+auto sp  = fast_dynamic_pointer_cast<Circle>(shared_shape);  // empty on failure
+```
+
+The code is heavily inspired by [FastDynamicCast](https://github.com/tobspr/FastDynamicCast)
+and is effectively a modern, portable reimplementation of it. The basic idea in one picture:
 
 ![offset](ptroffset.png)
 
-Also read [this reddit post.](https://www.reddit.com/r/cpp/comments/ilbf1y/vtable_layout_differences_between_itanium_and)
+`dynamic_cast` walks the RTTI graph every time. But for a given *dynamic type* (identified by
+its vtable pointer) the answer never changes: the target subobject is always at the same
+byte offset from the source subobject, or the cast always fails. `fast_cast` remembers that
+offset the first time it sees a vtable and reuses it on every subsequent call. Also read
+[this reddit post](https://www.reddit.com/r/cpp/comments/ilbf1y/vtable_layout_differences_between_itanium_and)
+on why this works on both the Itanium and the MSVC ABI.
 
-# Improvements from FastDynamicCast
+## Contents
 
-The library also includes **compile-time optimizations**:
-
-- If a cast can be resolved with `static_cast` or identity, it avoids any runtime overhead.
-- Failed casts are cached to reduce repeated dynamic lookups.
-
----
+- [Features](#features)
+- [Installation](#installation)
+- [Usage](#usage)
+- [API reference](#api-reference)
+- [Semantics: how it compares to `dynamic_cast`](#semantics-how-it-compares-to-dynamic_cast)
+- [How it works](#how-it-works)
+- [Caveats](#caveats)
+- [Language and compiler support](#language-and-compiler-support)
+- [Benchmarks](#benchmarks)
+- [Building and testing](#building-and-testing)
+- [Releasing](#releasing)
+- [Contributing](#contributing)
+- [License](#license)
 
 ## Features
 
-- Pointer, reference, and `std::shared_ptr` casting.
-- **Fast paths** for:
-    - Exact types (identity cast)
-    - `static_cast`-safe conversions
-- **Dynamic path** with per-thread vtable offset caching.
-- **Failed cast caching** for repeated misses.
-- Header-only, lightweight, and requires only C++17+ (C++23 constexpr enhancements included).
-- Works with complex inheritance, including multiple and virtual inheritance.
-
----
+- **Drop-in**: pointer, reference, and `std::shared_ptr` overloads with the same results,
+  null/throw behaviour and const-correctness as `dynamic_cast` / `std::dynamic_pointer_cast`.
+- **Compile-time fast paths**: identity, cv-adding and derived-to-base casts compile to a
+  `static_cast` (or nothing at all) and are `constexpr` even in C++11.
+- **Runtime fast path**: per-thread, per-`(From, To)` cache of the last vtable seen and the
+  pointer adjustment it needed. A cache hit is a load, a compare and an add.
+- **Failed casts are cached too**, so repeated misses are as cheap as repeated hits.
+- **Works with anything `dynamic_cast` works with**: multiple inheritance, virtual
+  inheritance, cross-casts between sibling bases, casts to `void*` (most-derived object).
+- **Header-only, C++11 and up**, no dependencies, no linking. Only `<type_traits>`,
+  `<memory>`, `<cstring>`, `<limits>` and `<typeinfo>` are included.
+- **Portable**: the cached path is used on the Itanium ABI (GCC, Clang, ICC, AppleClang,
+  MinGW) and on MSVC. On any other ABI every call transparently forwards to `dynamic_cast`.
+- **Thread-safe** without locks or atomics: each thread owns its own cache.
 
 ## Installation
 
-Simply include the header in your project:
+### Copy the header
+
+Everything is in [`fastcast.hpp`](fastcast.hpp). Copy it into your project and
 
 ```cpp
 #include "fastcast.hpp"
 ```
 
-No linking is required.
+### CMake: `add_subdirectory` / `FetchContent`
+
+```cmake
+include(FetchContent)
+FetchContent_Declare(FastCast
+        GIT_REPOSITORY https://github.com/reach2sayan/FastCast.git
+        GIT_TAG        main)   # or a release tag
+FetchContent_MakeAvailable(FastCast)
+
+target_link_libraries(my_target PRIVATE FastCast::FastCast)
+```
+
+Tests, examples and benchmarks are only built when FastCast is the top-level project, so
+consuming it this way never pulls in Google Benchmark.
+
+### CMake: install and `find_package`
+
+```sh
+cmake -S FastCast -B build -DFASTCAST_BUILD_TESTS=OFF -DFASTCAST_BUILD_EXAMPLES=OFF \
+      -DFASTCAST_BUILD_BENCHMARKS=OFF -DCMAKE_INSTALL_PREFIX=/opt/fastcast
+cmake --build build && cmake --install build
+```
+
+```cmake
+find_package(FastCast 1.1 REQUIRED)
+target_link_libraries(my_target PRIVATE FastCast::FastCast)
+```
+
+The header is installed to `<prefix>/include/fastcast.hpp`, so use `#include <fastcast.hpp>`.
+
+### NuGet (Visual Studio / MSBuild)
+
+The [`FastCast`](https://www.nuget.org/packages/FastCast) package carries the header and a
+`.targets` file that adds the include path to every project referencing it. It is
+header-only, so it is valid for any platform, architecture and configuration:
+
+```
+Install-Package FastCast
+```
+
+or in the `.vcxproj` / `packages.config`:
+
+```xml
+<PackageReference Include="FastCast" Version="1.1.0" />
+```
+
+Every GitHub release also attaches the `.nupkg`, for private feeds.
+
+### Downloadable tarball
+
+Every [GitHub release](https://github.com/reach2sayan/FastCast/releases) attaches:
+
+| Asset | Contents |
+|---|---|
+| `FastCast-<version>.tar.gz` / `.zip` | Installable tree: `include/fastcast.hpp`, `lib/cmake/FastCast/` (for `find_package`), `share/doc/FastCast/`. Unpack it anywhere and point `CMAKE_PREFIX_PATH` at it. |
+| `FastCast-<version>-src.tar.gz` | Full source tree with tests, examples and benchmarks. |
+| `FastCast.<version>.nupkg` | The NuGet package. |
+| `fastcast.hpp` | Just the header. |
 
 ## Usage
 
-### Pointer Casting
+All examples below are compiled and run by `ctest` from [`examples/basic.cpp`](examples/basic.cpp).
+
+### Pointer casting
 
 ```cpp
-struct Base { virtual ~Base() = default; };
-struct Derived : Base {};
+struct Shape  { virtual ~Shape() = default; };
+struct Circle : Shape {};
+struct Square : Shape {};
 
-Derived d;
-Base* bp = &d;
+Circle circle;
+Shape *shape = &circle;
 
-Derived* dp1 = fast_cast<Derived*>(bp); // fast_dynamic_cast equivalent
+Circle *c = fast_cast<Circle *>(shape);   // == &circle
+Square *s = fast_cast<Square *>(shape);   // == nullptr
 ```
 
-### Reference Casting
+### Reference casting
 
 ```cpp
-Derived d;
-Base& br = d;
-
+Circle &c = fast_cast<Circle &>(*shape);  // ok
 try {
-    Derived& dr = fast_cast<Derived&>(br); // throws std::bad_cast on failure
-} catch (const std::bad_cast& e) {
-    std::cerr << "Invalid cast\n";
+  Square &s = fast_cast<Square &>(*shape);
+} catch (const std::bad_cast &) {
+  // exactly like dynamic_cast<Square &>
 }
 ```
 
-### Shared Pointer Casting
+### `std::shared_ptr` casting
 
 ```cpp
-auto sp_base = std::make_shared<Derived>();
-auto sp_derived = fast_dynamic_pointer_cast<Derived>(sp_base);
+std::shared_ptr<Shape> owned = std::make_shared<Square>();
+
+std::shared_ptr<Square> square = fast_dynamic_pointer_cast<Square>(owned);  // shares ownership
+std::shared_ptr<Circle> circle = fast_dynamic_pointer_cast<Circle>(owned);  // empty
 ```
 
-### Identity Casting
+### Upcasts, identity casts and `const`
 
 ```cpp
-Derived* dp = &d;
-auto same = fast_cast<Derived*>(dp); // trivial, no runtime overhead
+Shape *up = fast_cast<Shape *>(&circle);          // static_cast, zero cost, constexpr
+Circle *same = fast_cast<Circle *>(&circle);      // identity, zero cost, constexpr
+
+const Shape *cs = &circle;
+const Circle *cc = fast_cast<const Circle *>(cs); // fine
+Circle *bad = fast_cast<Circle *>(cs);            // compile error: cannot cast away const
 ```
+
+### Most-derived object (`void*`)
+
+```cpp
+void *whole = fast_cast<void *>(shape);  // same as dynamic_cast<void *>(shape)
+```
+
+### Opting out of the global names
+
+The header exports `fast_cast` and `fast_dynamic_pointer_cast` into the global namespace
+for convenience. Define `FASTCAST_NO_GLOBAL_USING` before including it to keep them in
+`namespace fastcast` only:
+
+```cpp
+#define FASTCAST_NO_GLOBAL_USING
+#include "fastcast.hpp"
+auto *c = fastcast::fast_cast<Circle *>(shape);
+```
+
+## API reference
+
+Everything lives in `namespace fastcast`.
+
+| Function | Result on failure | Notes |
+|---|---|---|
+| `template <class To, class From> To fast_cast(From *p) noexcept` | `nullptr` | `To` must be a pointer type. `constexpr` when the cast is static. |
+| `template <class To, class From> To fast_cast(From &r)` | throws `std::bad_cast` | `To` must be a reference type. `constexpr` from C++14 when the cast is static. |
+| `template <class To, class From> std::shared_ptr<To> fast_dynamic_pointer_cast(const std::shared_ptr<From> &p) noexcept` | empty `shared_ptr` | Result shares ownership with `p` (aliasing constructor), like `std::dynamic_pointer_cast`. |
+
+Macros:
+
+| Macro | Meaning |
+|---|---|
+| `FASTCAST_VERSION_MAJOR` / `_MINOR` / `_PATCH` | Version components. |
+| `FASTCAST_VERSION` | `MAJOR * 10000 + MINOR * 100 + PATCH`, e.g. `10100` for 1.1.0. |
+| `FASTCAST_VERSION_STRING` | `"1.1.0"`. |
+| `FASTCAST_CPLUSPLUS` | Detected language version (`__cplusplus`, or `_MSVC_LANG` on MSVC). |
+| `FASTCAST_SUPPORTED` | Defined (to `1`) when the cached fast path is active for this ABI. Undefined means every cast forwards to `dynamic_cast`. |
+| `FASTCAST_NO_GLOBAL_USING` | Define before including to suppress the global `using` declarations. |
+
+## Semantics: how it compares to `dynamic_cast`
+
+For every well-formed cast, `fast_cast<T>(x)` returns the same value as `dynamic_cast<T>(x)`
+(or throws the same exception). The test suite asserts this by comparing the two side by side
+on simple, multiple, virtual and diamond hierarchies, cold and hot, from many threads, and
+under a randomised sequence of dynamic types. The differences are all compile-time:
+
+| Cast | `dynamic_cast` | `fast_cast` |
+|---|---|---|
+| Downcast / cross-cast of a polymorphic type | runtime check | runtime check, cached |
+| Identity, cv-adding, derived-to-base | runtime no-op | `static_cast`, `constexpr` |
+| To `void*` | most-derived object | most-derived object (cached) |
+| Non-polymorphic source, downcast | compile error | compile error (`static_assert`) |
+| Casting away `const` | compile error | compile error (`static_assert`) |
+| `volatile`-qualified pointee, downcast | allowed | not supported |
+| From inside a base-class constructor | sees the base's dynamic type | same |
+
+## How it works
+
+`fast_cast<To>(From *p)` is resolved at compile time into one of two paths:
+
+1. **Static path** — if `From*` converts implicitly to `To` (identity, adding `const`,
+   derived-to-base) the call is a `static_cast`. Nothing happens at runtime.
+2. **Dynamic path** — otherwise `From` must be polymorphic, and:
+
+   ```
+   read the vptr of *p                      (one memcpy; first word of the object)
+   if vptr == cached_vptr[thread][From,To]:
+       if cached_offset == FAILED: return nullptr
+       return (To)((char*)p + cached_offset)
+   result = dynamic_cast<To>(p)             (slow path, once per vtable)
+   cache vptr and (result - p) or FAILED
+   return result
+   ```
+
+The cache key is the **vtable pointer of the `From` subobject**, which identifies both the
+most-derived type *and* which subobject of it `p` points to. That is enough to make the offset
+a constant: an object of a given dynamic type always has its `To` subobject at the same
+distance from its `From` subobject. Two `Base` subobjects inside the same object have two
+different vtables, so they get two different (correct) offsets.
+
+Each `(From, To)` pair instantiates its own cache, and each cache is `thread_local`, so no
+synchronisation is needed and there is no false sharing between threads. The cache holds one
+entry: the last vtable seen.
+
+## Caveats
+
+- **Single-entry cache.** If one call site alternates between *different* dynamic types
+  (`Circle`, `Square`, `Circle`, `Square`, …), every call misses and costs a `dynamic_cast`
+  plus a few stores. It is never slower than `dynamic_cast` by more than that bookkeeping,
+  but it is not faster either. See the [cold vs hot](#where-the-speedup-comes-from-the-cache)
+  numbers.
+- **RTTI is required.** The slow path is a real `dynamic_cast`; `-fno-rtti` / `/GR-` is
+  not supported (it is not supported by `dynamic_cast` either).
+- **Object layout assumptions.** The fast path reads the vptr from the first word of the
+  object. This is guaranteed by the Itanium ABI and by MSVC, which covers every mainstream
+  compiler and platform. On anything else `FASTCAST_SUPPORTED` is undefined and the header
+  falls back to plain `dynamic_cast`.
+- **Shared libraries** may end up with more than one copy of a vtable for the same type.
+  That only causes an extra cache miss per copy; results stay correct because the key is the
+  actual vtable address, not the type.
+- **`volatile` pointees** are not supported on the dynamic path.
+
+## Language and compiler support
+
+The header requires **C++11**. Newer standards only add `constexpr`-ness:
+
+| Standard | What you get |
+|---|---|
+| C++11 | Everything. The pointer overload is `constexpr` for static casts. |
+| C++14 | The reference overload is also `constexpr` for static casts. |
+| C++17 / C++20 | No changes. |
+| C++23 | The dynamic path is declared `constexpr` too (usable in constant evaluation only for null pointers, since it uses `thread_local` storage). |
+
+Every commit is built and tested by CI with warnings as errors on:
+
+| Compiler | Standards | Extras |
+|---|---|---|
+| GCC (Ubuntu) | 11, 14, 17, 20, 23 | ASan + UBSan (incl. `-fsanitize=vptr`) at 11, 17, 23 |
+| Clang (Ubuntu) | 11, 14, 17, 20, 23 | ASan + UBSan at 11, 17, 23 |
+| AppleClang (macOS) | 11, 14, 17, 20, 23 | |
+| MSVC (Windows, x64) | 14 (11 maps to 14), 17, 20, latest | |
+
+plus an `install` + `find_package` job and a `clang-format` check.
 
 ## Benchmarks
 
-Run on a 16-core 4.768 GHz CPU (mean of 5 repetitions, `-DCMAKE_BUILD_TYPE=Release`).
+Run on a 16-core 4.768 GHz CPU (mean of 5 repetitions, `-DCMAKE_BUILD_TYPE=Release`, GCC).
 Reproduce with `./measure` and regenerate the plots with `benchmark/plot_results.py`
-(see [the benchmark directory](benchmark/)). CPU frequency scaling was enabled, so
-sub-nanosecond figures are throughput-limited and should be read as "effectively free",
-not as precise latencies.
+(see [the benchmark directory](benchmark/) and [Building and testing](#building-and-testing)).
+CPU frequency scaling was enabled, so sub-nanosecond figures are throughput-limited and
+should be read as "effectively free", not as precise latencies.
 
 ### Where the speedup comes from: the cache
 
@@ -145,16 +366,97 @@ expensive and the cache pays off most.
 `Derived* → Base*` is resolved at compile time, so `fast_cast`, `static_cast`, and
 `dynamic_cast` all measure ~0.12 ns — identical and effectively free.
 
-#### Observations
+## Building and testing
 
-- Static-safe / identity casts are free, matching `static_cast`.
-- A **first-time (cold)** polymorphic cast is on par with `dynamic_cast` — `fast_cast`
-  adds only a small constant of bookkeeping over it.
-- **Repeated (hot)** casts hit the cache and are roughly an order of magnitude faster.
-- Failure caching makes repeated invalid casts as cheap as successful hot casts.
+```sh
+cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
+cmake --build build
+ctest --test-dir build --output-on-failure
+```
 
-## Requirements
+CMake options (all default to `ON` when FastCast is the top-level project, `OFF` otherwise,
+except the last two which default to `OFF`):
 
-- C++17 minimum (C++23 optional for constexpr enhancements)
-- Header-only, no linking required
-- Optional: [Catch2 v2](https://github.com/catchorg/Catch2) (for tests; vendored as a single header at `tests/catch.hpp`, no fetch required), Google Benchmark (for benchmarks)
+| Option | Effect |
+|---|---|
+| `FASTCAST_BUILD_TESTS` | Unit tests (Catch2 v2, vendored as `tests/catch.hpp`) and compile-failure tests. |
+| `FASTCAST_BUILD_EXAMPLES` | Builds and runs `examples/basic.cpp`. |
+| `FASTCAST_BUILD_BENCHMARKS` | Fetches Google Benchmark and builds the `measure` target. |
+| `FASTCAST_INSTALL` | Generates `install` rules and the `FastCastConfig.cmake` package. |
+| `FASTCAST_WARNINGS_AS_ERRORS` | `-Werror` / `/WX` for tests, examples and benchmarks. |
+| `FASTCAST_ENABLE_SANITIZERS` | Builds tests and examples with ASan + UBSan. |
+| `CMAKE_CXX_STANDARD` | Pick the standard to test under (`11` … `23`, default `23`). |
+
+The test suite has three kinds of tests, selectable with `ctest -L <label>`:
+
+- `unit` — the Catch2 suite in `tests/tests.cpp` (`./build/tests --list-tests` to enumerate;
+  tags such as `[cache]`, `[threads]`, `[shared_ptr]` filter it, e.g. `./build/tests "[cache]"`).
+- `compile_fail` — each file in `tests/compile_fail/` must *fail* to compile with a specific
+  diagnostic (casting away `const`, non-polymorphic downcast, non-pointer target …).
+- `example` — `examples/basic.cpp`, which is also the source of the README snippets.
+
+To check the installed package works, see `tests/package/` and the `package` CI job.
+
+### Running the benchmarks
+
+```sh
+cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DFASTCAST_BUILD_BENCHMARKS=ON
+cmake --build build --target measure
+./build/measure --benchmark_filter='-.*threads:' --benchmark_repetitions=5 \
+    --benchmark_report_aggregates_only=true \
+    --benchmark_format=json --benchmark_out=results.json
+python3 benchmark/plot_results.py results.json benchmark/plots/
+```
+
+## Releasing
+
+A release is a tag. Pushing `vX.Y.Z` runs [`release.yml`](.github/workflows/release.yml), which:
+
+1. checks that the tag names the version in `fastcast.hpp` (and stops if not),
+2. builds and tests, then produces the CPack tarballs (`package` job) and the NuGet package
+   (`nuget` job, on Windows with `nuget pack contrib/nuget/FastCast.nuspec`),
+3. creates the GitHub release with the `CHANGELOG.md` section for that version as notes
+   (GitHub's generated notes appended) and all assets attached,
+4. publishes the `.nupkg` to nuget.org by **trusted publishing** — the job's OIDC token is
+   exchanged for a short-lived API key by `NuGet/login`; no long-lived secret is stored.
+
+To cut one:
+
+```sh
+# 1. bump FASTCAST_VERSION_{MAJOR,MINOR,PATCH} and FASTCAST_VERSION_STRING in fastcast.hpp,
+#    the expected values in tests/tests.cpp, and add a "## [X.Y.Z] - date" section to CHANGELOG.md
+git commit -am "Release X.Y.Z"
+git tag -a vX.Y.Z -m "FastCast X.Y.Z"
+git push origin main vX.Y.Z
+```
+
+"Run workflow" on a branch builds the same artifacts and publishes nothing, which is how a
+change to the pipeline is tried before a version rides on it.
+
+### One-time nuget.org setup (trusted publishing)
+
+1. On nuget.org, **Account → Trusted Publishing → Add**: repository owner `reach2sayan`,
+   repository `FastCast`, workflow file `release.yml`, environment left blank. If the package
+   does not exist yet the policy is created as *pending* and becomes permanent on first push.
+2. In the GitHub repository, **Settings → Secrets and variables → Actions → Variables**: add
+   `NUGET_USER` = your nuget.org profile name. The publish steps are skipped while it is unset,
+   so forks and dry runs never try to push.
+
+## Contributing
+
+`main` is protected by a ruleset ([`.github/rulesets/main.json`](.github/rulesets/main.json)):
+no direct pushes, no force-pushes, no deletion; changes land through a pull request whose
+`ci` check (the aggregate of every CI job) is green and whose branch is up to date. Repository
+admins are on the bypass list.
+
+- Format with `clang-format` (LLVM style, see `.clang-format`); CI checks it.
+- Keep the header and the tests C++11-clean; CI builds every standard from 11 to 23.
+- The version is defined once, in the macros at the top of `fastcast.hpp`. CMake reads them,
+  so bump those (and the test in `tests/tests.cpp`) and add a line to [`CHANGELOG.md`](CHANGELOG.md).
+- Run the full local matrix before pushing if you can:
+  `for s in 11 14 17 20 23; do cmake -S . -B b$s -DCMAKE_CXX_STANDARD=$s -DFASTCAST_WARNINGS_AS_ERRORS=ON && cmake --build b$s && ctest --test-dir b$s; done`
+
+## License
+
+MIT, see [LICENSE.txt](LICENSE.txt). The vendored `tests/catch.hpp` is Catch2 v2.13.10,
+distributed under the Boost Software License 1.0.

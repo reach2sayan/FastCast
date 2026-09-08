@@ -5,37 +5,42 @@ on:
     branches: [ "main" ]
   pull_request:
     branches: [ "main" ]
+  workflow_dispatch:
 
 permissions:
   contents: read
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
-  build:
-    name: ${{ matrix.os }} / ${{ matrix.cpp_compiler }} (C++${{ matrix.std }})
-    runs-on: ${{ matrix.os }}
+  # -------------------------------------------------------------------------
+  # Unit tests + compile-failure tests + examples, on every compiler and
+  # every language standard the library supports (C++11 .. C++23).
+  # -------------------------------------------------------------------------
+  test:
+    name: ${{ matrix.config.name }} / C++${{ matrix.std }}
+    runs-on: ${{ matrix.config.os }}
     strategy:
       fail-fast: false
       matrix:
-        include:
-          # GCC builds at C++23 to also exercise the constexpr code path.
-          - os: ubuntu-latest
-            c_compiler: gcc
-            cpp_compiler: g++
-            std: 23
-            cmake_args: "-G Ninja -DCMAKE_C_COMPILER=gcc -DCMAKE_CXX_COMPILER=g++ -DCMAKE_BUILD_TYPE=Release"
-
-          - os: ubuntu-latest
-            c_compiler: clang
-            cpp_compiler: clang++
-            std: 20
-            cmake_args: "-G Ninja -DCMAKE_C_COMPILER=clang -DCMAKE_CXX_COMPILER=clang++ -DCMAKE_BUILD_TYPE=Release"
-
+        std: [ 11, 14, 17, 20, 23 ]
+        config:
+          - name: ubuntu-gcc
+            os: ubuntu-latest
+            cmake_args: -G Ninja -DCMAKE_C_COMPILER=gcc -DCMAKE_CXX_COMPILER=g++ -DCMAKE_BUILD_TYPE=Release
+          - name: ubuntu-clang
+            os: ubuntu-latest
+            cmake_args: -G Ninja -DCMAKE_C_COMPILER=clang -DCMAKE_CXX_COMPILER=clang++ -DCMAKE_BUILD_TYPE=Release
+          - name: macos-appleclang
+            os: macos-latest
+            cmake_args: -G Ninja -DCMAKE_BUILD_TYPE=Release
           # MSVC uses the default Visual Studio (multi-config) generator.
-          - os: windows-latest
-            c_compiler: cl
-            cpp_compiler: cl
-            std: 20
-            cmake_args: "-A x64"
+          # (MSVC has no C++11 switch; CMake silently builds C++14 for std=11.)
+          - name: windows-msvc
+            os: windows-latest
+            cmake_args: -A x64
 
     steps:
       - uses: actions/checkout@v4
@@ -45,15 +50,23 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y ninja-build
-          if [ "${{ matrix.c_compiler }}" = "clang" ]; then
+          if [ "${{ matrix.config.name }}" = "ubuntu-clang" ]; then
             sudo apt-get install -y clang
           fi
+
+      - name: Install dependencies (macOS)
+        if: runner.os == 'macOS'
+        run: brew install ninja
 
       - name: Configure
         run: >
           cmake -B build -S .
-          ${{ matrix.cmake_args }}
+          ${{ matrix.config.cmake_args }}
           -DCMAKE_CXX_STANDARD=${{ matrix.std }}
+          -DFASTCAST_BUILD_TESTS=ON
+          -DFASTCAST_BUILD_EXAMPLES=ON
+          -DFASTCAST_BUILD_BENCHMARKS=OFF
+          -DFASTCAST_WARNINGS_AS_ERRORS=ON
 
       - name: Build
         run: cmake --build build --config Release
@@ -61,11 +74,138 @@ jobs:
       - name: Test
         run: ctest --test-dir build --build-config Release --output-on-failure
 
+  # -------------------------------------------------------------------------
+  # AddressSanitizer + UndefinedBehaviorSanitizer (incl. -fsanitize=vptr),
+  # which is the sharpest check we have that the cached pointer adjustments
+  # really produce objects of the claimed type.
+  # -------------------------------------------------------------------------
+  sanitize:
+    name: sanitizers / ${{ matrix.compiler }} / C++${{ matrix.std }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        compiler: [ gcc, clang ]
+        std: [ 11, 17, 23 ]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ninja-build
+          if [ "${{ matrix.compiler }}" = "clang" ]; then
+            sudo apt-get install -y clang
+          fi
+
+      - name: Configure
+        run: >
+          cmake -B build -S . -G Ninja
+          -DCMAKE_C_COMPILER=${{ matrix.compiler }}
+          -DCMAKE_CXX_COMPILER=${{ matrix.compiler == 'gcc' && 'g++' || 'clang++' }}
+          -DCMAKE_BUILD_TYPE=Debug
+          -DCMAKE_CXX_STANDARD=${{ matrix.std }}
+          -DFASTCAST_BUILD_BENCHMARKS=OFF
+          -DFASTCAST_WARNINGS_AS_ERRORS=ON
+          -DFASTCAST_ENABLE_SANITIZERS=ON
+
+      - name: Build
+        run: cmake --build build
+
+      - name: Test
+        env:
+          ASAN_OPTIONS: detect_leaks=1:strict_string_checks=1:check_initialization_order=1
+          UBSAN_OPTIONS: print_stacktrace=1:halt_on_error=1
+        run: ctest --test-dir build --output-on-failure
+
+  # -------------------------------------------------------------------------
+  # install + find_package(FastCast) from a separate consumer project.
+  # -------------------------------------------------------------------------
+  package:
+    name: install & find_package
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ninja-build
+
+      - name: Install FastCast to a prefix
+        run: |
+          cmake -B build -S . -G Ninja \
+            -DFASTCAST_BUILD_TESTS=OFF -DFASTCAST_BUILD_EXAMPLES=OFF \
+            -DFASTCAST_BUILD_BENCHMARKS=OFF \
+            -DCMAKE_INSTALL_PREFIX="$PWD/prefix"
+          cmake --build build
+          cmake --install build
+
+      - name: Build and run the consumer project
+        run: |
+          cmake -B build-pkg -S tests/package -G Ninja \
+            -DCMAKE_PREFIX_PATH="$PWD/prefix"
+          cmake --build build-pkg
+          ctest --test-dir build-pkg --output-on-failure
+
+  # -------------------------------------------------------------------------
+  # clang-format (LLVM style, see .clang-format). The vendored Catch2 header
+  # is excluded.
+  # -------------------------------------------------------------------------
+  format:
+    name: clang-format
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install clang-format
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y clang-format-18
+
+      - name: Check formatting
+        run: |
+          clang-format-18 --version
+          clang-format-18 --dry-run --Werror \
+            fastcast.hpp \
+            tests/tests.cpp tests/utilities.hpp tests/package/main.cpp \
+            tests/compile_fail/*.cpp \
+            examples/*.cpp \
+            benchmark/benchmark.cpp
+
+  # -------------------------------------------------------------------------
+  # Benchmarks. Timing-sensitive, so only run (and publish) on Linux/GCC.
+  # -------------------------------------------------------------------------
+  benchmark:
+    name: benchmarks
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ninja-build
+
+      - name: Configure
+        run: >
+          cmake -B build -S . -G Ninja
+          -DCMAKE_C_COMPILER=gcc -DCMAKE_CXX_COMPILER=g++
+          -DCMAKE_BUILD_TYPE=Release
+          -DCMAKE_CXX_STANDARD=23
+          -DFASTCAST_BUILD_TESTS=OFF
+          -DFASTCAST_BUILD_EXAMPLES=OFF
+          -DFASTCAST_BUILD_BENCHMARKS=ON
+          -DFASTCAST_WARNINGS_AS_ERRORS=ON
+
+      - name: Build
+        run: cmake --build build
+
       # Pin the CPU to the performance governor so the timing-sensitive
       # benchmarks aren't skewed by frequency scaling. Hosted runners are often
       # virtualized and don't expose cpufreq, so this is best-effort.
       - name: Set CPU governor to performance
-        if: runner.os == 'Linux'
         run: |
           if echo performance | sudo tee /sys/devices/system/cpu/cpu*/cpufreq/scaling_governor >/dev/null 2>&1; then
             echo "Governor set to performance."
@@ -73,17 +213,35 @@ jobs:
             echo "cpufreq not available on this runner; continuing with default."
           fi
 
-      # Benchmarks are timing-sensitive, so only run/publish them on Linux.
-      # The 'measure' target is still compiled on every platform by the Build
-      # step above, which keeps the benchmark code itself building under MSVC.
       - name: Run benchmarks
-        if: runner.os == 'Linux'
         working-directory: build
         run: ./measure --benchmark_format=console --benchmark_out=benchmark_results.json
 
       - name: Upload benchmark results
-        if: runner.os == 'Linux'
         uses: actions/upload-artifact@v4
         with:
-          name: benchmark-results-${{ matrix.os }}-${{ matrix.c_compiler }}
+          name: benchmark-results-ubuntu-gcc
           path: build/benchmark_results.json
+
+  # -------------------------------------------------------------------------
+  # The one check the `main` ruleset requires (.github/rulesets/main.json):
+  # green only when every job above is. Keeping a single stable name here
+  # means the ruleset never has to list the matrix.
+  # -------------------------------------------------------------------------
+  ci:
+    name: ci
+    if: always()
+    needs: [ test, sanitize, package, format, benchmark ]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check that every job succeeded
+        run: |
+          echo '${{ toJSON(needs) }}' | tee needs.json
+          python3 - <<'PY'
+          import json, sys
+          needs = json.load(open("needs.json"))
+          bad = {k: v["result"] for k, v in needs.items() if v["result"] != "success"}
+          for k, r in bad.items():
+              print(f"::error::job '{k}' finished with result '{r}'")
+          sys.exit(1 if bad else 0)
+          PY
